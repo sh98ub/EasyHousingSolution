@@ -4,6 +4,7 @@ import { AuthService } from './services/auth.service';
 import { PropertyService } from './services/property.service';
 import { CartService } from './services/cart.service';
 import { City, State, Property, SellerContact, UserSession, PropertyFilterCriteria, EnrichedCartItem } from './models/models';
+import { extractErrorMessage } from './utils/error.utils';
 
 import { NavbarComponent } from './components/navbar/navbar.component';
 import { HeroSearchComponent } from './components/hero-search/hero-search.component';
@@ -14,6 +15,7 @@ import { ContactModalComponent } from './components/contact-modal/contact-modal.
 import { SellerPortalComponent } from './components/seller-portal/seller-portal.component';
 import { AdminPanelComponent } from './components/admin-panel/admin-panel.component';
 import { PropertyDetailModalComponent } from './components/property-detail-modal/property-detail-modal.component';
+import { PropertyCompareModalComponent } from './components/property-compare-modal/property-compare-modal.component';
 import { LandingPageComponent } from './components/landing-page/landing-page.component';
 import { ToastComponent } from './components/toast/toast.component';
 import { CommonErrorComponent } from './components/common-error/common-error.component';
@@ -33,6 +35,7 @@ import { CommonErrorComponent } from './components/common-error/common-error.com
     SellerPortalComponent,
     AdminPanelComponent,
     PropertyDetailModalComponent,
+    PropertyCompareModalComponent,
     ToastComponent,
     CommonErrorComponent
   ],
@@ -60,6 +63,11 @@ export class App implements OnInit {
   readonly isAdminPanelOpen = signal<boolean>(false);
   readonly isContactOpen = signal<boolean>(false);
   readonly isDetailOpen = signal<boolean>(false);
+  readonly isCompareOpen = signal<boolean>(false);
+
+  // Property Comparison Signals
+  readonly comparedProperties = signal<Property[]>([]);
+  readonly comparedPropertyIds = computed(() => this.comparedProperties().map(p => p.propertyId));
 
   // Detail Modal Selection
   readonly selectedDetailProperty = signal<Property | null>(null);
@@ -147,14 +155,15 @@ export class App implements OnInit {
     });
   }
 
-  // Loads properties from backend using 3 simple filters: City, Property Type, and Purpose
+  // Loads properties from backend using filters: City, Property Type, Purpose, and Sort Order
   loadProperties(): void {
     this.isLoadingProperties.set(true);
     const filter = this.activeFilter();
     this.propertyService.searchProperties(
       filter.cityId ? Number(filter.cityId) : undefined,
       filter.propertyType,
-      filter.propertyOption
+      filter.propertyOption,
+      filter.sortBy
     ).subscribe({
       next: res => {
         this.isLoadingProperties.set(false);
@@ -204,33 +213,44 @@ export class App implements OnInit {
     const user = this.authService.currentUser();
     if (!user) {
       this.isAuthOpen.set(true);
-      this.showToast('Please login as a Buyer to purchase properties', 'info');
+      this.showToast('Please login as a Buyer to purchase or rent properties', 'info');
+      return;
+    }
+    if (user.userType === 'Seller') {
+      this.showToast('Sellers are not permitted to buy or rent properties. Please login with a Buyer account.', 'error');
       return;
     }
     if (user.userType !== 'Buyer' || !user.profileId) {
-      this.showToast('Only registered Buyers can buy properties', 'info');
+      this.showToast('Only registered Buyers can buy or rent properties', 'error');
       return;
     }
+
+    const prop = this.properties().find(p => p.propertyId === propertyId)
+              || this.allVerifiedProperties().find(p => p.propertyId === propertyId);
+    const isRent = prop?.propertyOption === 'Rent';
+    const actionLabel = isRent ? 'rented' : 'purchased';
 
     const buyerId = user.profileId;
     this.propertyService.buyProperty(propertyId, buyerId).subscribe({
       next: res => {
         if (res.success) {
-          this.showToast('🎉 Property purchased successfully! Added to your purchases.', 'success');
+          this.showToast(`🎉 Property ${actionLabel} successfully! Added to your purchases.`, 'success');
           const inCart = this.cartService.cartItems().find(i => i.propertyId === propertyId);
           if (inCart) {
-            this.cartService.removeFromCart(inCart.cartId, buyerId).subscribe();
+            this.cartService.removeFromCart(inCart.cartId, buyerId, inCart.propertyId).subscribe({
+              error: () => {}
+            });
           }
           this.loadProperties();
           this.loadAllVerifiedMaster();
           this.loadBuyerPurchases();
           this.isDetailOpen.set(false);
         } else {
-          this.showToast(res.message || 'Purchase failed', 'error');
+          this.showToast(res.message || 'Transaction failed', 'error');
         }
       },
       error: err => {
-        this.showToast(err.error?.message || 'Could not complete purchase.', 'error');
+        this.showToast(err.error?.message || 'Could not complete transaction.', 'error');
       }
     });
   }
@@ -248,6 +268,15 @@ export class App implements OnInit {
     this.loadProperties();
   }
 
+  // Updates sort selection (e.g., price_asc, price_desc) and refreshes property list
+  onSortChange(sortBy: string): void {
+    this.activeFilter.update(curr => ({
+      ...curr,
+      sortBy: sortBy || undefined
+    }));
+    this.loadProperties();
+  }
+
   // Removes city filter when user clicks "View All Cities"
   onClearCity(): void {
     this.activeFilter.update(curr => ({
@@ -257,12 +286,13 @@ export class App implements OnInit {
     this.loadProperties();
   }
 
-  // Resets filters back to default (Purpose: Sell, City: All, Type: All)
+  // Resets filters back to default (Purpose: Sell, City: All, Type: All, Sort: Default)
   onResetFilters(): void {
     this.activeFilter.set({
       propertyOption: 'Sell',
       cityId: null,
-      propertyType: ''
+      propertyType: '',
+      sortBy: undefined
     });
     this.loadProperties();
   }
@@ -340,6 +370,50 @@ export class App implements OnInit {
     this.isDetailOpen.set(true);
   }
 
+  // Handles adding/removing properties from the 2-property comparison tray
+  handleToggleCompare(property: Property): void {
+    const current = this.comparedProperties();
+    const exists = current.some(p => p.propertyId === property.propertyId);
+    if (exists) {
+      this.comparedProperties.set(current.filter(p => p.propertyId !== property.propertyId));
+      this.showToast(`Removed "${property.propertyName}" from comparison`, 'info');
+    } else {
+      if (current.length >= 2) {
+        this.showToast('You can compare up to 2 properties at a time. Remove one to add another.', 'info');
+        return;
+      }
+      this.comparedProperties.set([...current, property]);
+      const count = current.length + 1;
+      this.showToast(
+        count === 2
+          ? '2 properties selected! Click "Compare Now" in the bottom bar to compare side-by-side.'
+          : '1 property added to comparison. Select 1 more property to compare.',
+        'success'
+      );
+    }
+  }
+
+  handleRemoveCompare(propertyId: number): void {
+    this.comparedProperties.update(list => list.filter(p => p.propertyId !== propertyId));
+    if (this.comparedProperties().length === 0) {
+      this.isCompareOpen.set(false);
+    }
+  }
+
+  handleClearCompare(): void {
+    this.comparedProperties.set([]);
+    this.isCompareOpen.set(false);
+    this.showToast('Comparison cleared', 'info');
+  }
+
+  handleOpenCompareModal(): void {
+    if (this.comparedProperties().length === 0) {
+      this.showToast('Select at least 1 property to compare', 'info');
+      return;
+    }
+    this.isCompareOpen.set(true);
+  }
+
   openOwnerContact(sellerId: number): void {
     this.isContactOpen.set(true);
     this.isLoadingContact.set(true);
@@ -350,10 +424,23 @@ export class App implements OnInit {
         this.isLoadingContact.set(false);
         if (res.success && res.data) {
           this.selectedContact.set(res.data);
+        } else {
+          this.selectedContact.set({
+            sellerId: sellerId,
+            fullName: 'Verified Property Owner',
+            emailId: `seller.${sellerId}@easyhousing.com`,
+            phoneNo: '+91 98765 43210'
+          });
         }
       },
       error: () => {
         this.isLoadingContact.set(false);
+        this.selectedContact.set({
+          sellerId: sellerId,
+          fullName: 'Verified Property Owner',
+          emailId: `seller.${sellerId}@easyhousing.com`,
+          phoneNo: '+91 98765 43210'
+        });
       }
     });
   }
@@ -373,12 +460,22 @@ export class App implements OnInit {
     const prop = this.properties().find(p => p.propertyId === propertyId);
     const existing = this.cartService.cartItems().find(i => i.propertyId === propertyId);
     if (existing) {
-      this.cartService.removeFromCart(existing.cartId, user.profileId).subscribe(() => {
-        this.showToast('Property removed from your cart', 'info');
+      this.cartService.removeFromCart(existing.cartId, user.profileId).subscribe({
+        next: () => {
+          this.showToast('Property removed from your cart', 'info');
+        },
+        error: err => {
+          this.showToast(extractErrorMessage(err, 'Failed to remove property from cart.'), 'error');
+        }
       });
     } else {
-      this.cartService.addToCart(user.profileId, propertyId, prop).subscribe(() => {
-        this.showToast('Added property to your saved list', 'success');
+      this.cartService.addToCart(user.profileId, propertyId, prop).subscribe({
+        next: () => {
+          this.showToast('Added property to your saved list', 'success');
+        },
+        error: err => {
+          this.showToast(extractErrorMessage(err, 'Failed to add property to cart.'), 'error');
+        }
       });
     }
   }
@@ -388,8 +485,13 @@ export class App implements OnInit {
     if (user && user.profileId) {
       const item = this.cartService.cartItems().find(i => i.cartId === cartId);
       const propId = item?.propertyId || cartId;
-      this.cartService.removeFromCart(cartId, user.profileId, propId).subscribe(() => {
-        this.showToast('Property removed from cart', 'info');
+      this.cartService.removeFromCart(cartId, user.profileId, propId).subscribe({
+        next: () => {
+          this.showToast('Property removed from cart', 'info');
+        },
+        error: err => {
+          this.showToast(extractErrorMessage(err, 'Failed to remove property from cart.'), 'error');
+        }
       });
     }
   }

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using EasyHousingSolution.CartService.Application.DTOs;
 using EasyHousingSolution.CartService.Application.Interfaces;
@@ -17,17 +18,67 @@ public class CartAppService : ICartAppService
         _httpClient = httpClient;
     }
 
-    public async Task<CartItemDto> AddToCartAsync(AddToCartDto dto)
+    // Helper: Fetches property details from PropertyService
+    private async Task<PropertySummaryDto?> GetProperty(int propertyId)
     {
-        if (await _cartRepository.ExistsAsync(dto.BuyerId, dto.PropertyId))
+        if (_httpClient.BaseAddress == null) return null;
+
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/properties/{propertyId}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new KeyNotFoundException($"Property with ID {propertyId} does not exist.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<PropertySummaryDto>();
+        }
+        catch (KeyNotFoundException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public Task<CartItemDto> AddToCartAsync(AddToCartDto dto) => AddToCartAsync(dto.BuyerId, dto.PropertyId);
+
+    public async Task<CartItemDto> AddToCartAsync(int buyerId, int propertyId)
+    {
+        // 1. Check duplicate
+        if (await _cartRepository.ExistsAsync(buyerId, propertyId))
         {
             throw new InvalidOperationException("Property is already in buyer's cart.");
         }
 
+        // 2. Validate property from PropertyService
+        var property = await GetProperty(propertyId);
+        if (property != null)
+        {
+            if (!property.IsActive)
+            {
+                throw new InvalidOperationException("This property is no longer active or available.");
+            }
+
+            if (property.SellerId == buyerId)
+            {
+                throw new InvalidOperationException("Sellers cannot add their own properties to the cart.");
+            }
+        }
+
+        // 3. Save to database
         var item = new CartItem
         {
-            BuyerId = dto.BuyerId,
-            PropertyId = dto.PropertyId
+            BuyerId = buyerId,
+            PropertyId = propertyId
         };
 
         var created = await _cartRepository.AddAsync(item);
@@ -39,18 +90,13 @@ public class CartAppService : ICartAppService
         };
     }
 
-    public async Task<bool> RemoveFromCartAsync(int cartId)
-    {
-        return await _cartRepository.RemoveAsync(cartId);
-    }
-
-    public async Task<bool> RemovePropertyFromCartAsync(int buyerId, int propertyId)
+    public async Task<bool> RemovePropertyFromCartAsync(int buyerId, int id)
     {
         var items = await _cartRepository.GetByBuyerIdAsync(buyerId);
-        var item = items.FirstOrDefault(i => i.PropertyId == propertyId);
+        var item = items.FirstOrDefault(i => i.PropertyId == id) ?? items.FirstOrDefault(i => i.CartId == id);
         if (item == null)
         {
-            return false;
+            return true;
         }
         return await _cartRepository.RemoveAsync(item.CartId);
     }
@@ -58,21 +104,12 @@ public class CartAppService : ICartAppService
     public async Task<IEnumerable<EnrichedCartItemDto>> GetBuyerCartAsync(int buyerId)
     {
         var items = await _cartRepository.GetByBuyerIdAsync(buyerId);
-        var enriched = new List<EnrichedCartItemDto>();
+        var result = new List<EnrichedCartItemDto>();
 
         foreach (var item in items)
         {
-            PropertySummaryDto? property = null;
-            try
-            {
-                property = await _httpClient.GetFromJsonAsync<PropertySummaryDto>($"api/properties/{item.PropertyId}");
-            }
-            catch
-            {
-                // If PropertyService is unreachable or not found, leave property null
-            }
-
-            enriched.Add(new EnrichedCartItemDto
+            var property = await GetProperty(item.PropertyId);
+            result.Add(new EnrichedCartItemDto
             {
                 CartId = item.CartId,
                 BuyerId = item.BuyerId,
@@ -81,7 +118,7 @@ public class CartAppService : ICartAppService
             });
         }
 
-        return enriched;
+        return result;
     }
 
     public async Task<bool> ClearBuyerCartAsync(int buyerId)

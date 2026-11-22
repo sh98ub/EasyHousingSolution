@@ -27,6 +27,7 @@ builder.Services.AddHttpClient<ICartAppService, CartAppService>(client =>
 {
     var baseUrl = builder.Configuration["ServiceUrls:PropertyService"] ?? "http://localhost:5002/";
     client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
 });
 
 // JWT Authentication
@@ -96,12 +97,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Ensure database created
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<CartDbContext>();
-    try { db.Database.EnsureCreated(); } catch { }
-}
 
 app.Run("http://localhost:5004");

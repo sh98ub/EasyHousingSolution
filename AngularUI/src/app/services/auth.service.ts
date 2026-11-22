@@ -1,6 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, tap, catchError } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { ApiResponse, UserSession } from '../models/models';
 
 @Injectable({
@@ -23,54 +23,6 @@ export class AuthService {
         if (res.success && res.data) {
           this.setSession(res.data);
         }
-      }),
-      catchError(() => {
-        // Resilient fallback for UI testing when offline (aligned with backend seeds)
-        const email = credentials.emailId.toLowerCase().trim();
-        let role: 'Admin' | 'Buyer' | 'Seller' = 'Buyer';
-        let fullName = 'Rajesh Sharma';
-        let profileId = 1;
-
-        if (email.includes('admin')) {
-          role = 'Admin';
-          fullName = 'System Administrator';
-          profileId = 1;
-        } else if (email.includes('seller') || email.includes('ananya') || email.includes('vikram')) {
-          role = 'Seller';
-          if (email.includes('ananya')) {
-            fullName = 'Ananya Deshmukh';
-            profileId = 2;
-          } else if (email.includes('vikram')) {
-            fullName = 'Vikram Singhania';
-            profileId = 3;
-          } else {
-            fullName = 'Amit Patel';
-            profileId = 1;
-          }
-        } else {
-          if (email.includes('priya')) {
-            fullName = 'Priya Nair';
-            profileId = 2;
-          } else {
-            fullName = 'Rajesh Sharma';
-            profileId = 1;
-          }
-        }
-
-        const session: UserSession = {
-          token: 'mock_jwt_token_' + Date.now(),
-          emailId: email,
-          userType: role,
-          fullName,
-          profileId
-        };
-        this.setSession(session);
-
-        return of({
-          success: true,
-          message: 'Signed in successfully (offline demo mode)',
-          data: session
-        });
       })
     );
   }
@@ -81,21 +33,6 @@ export class AuthService {
         if (res.success && res.data) {
           this.setSession(res.data);
         }
-      }),
-      catchError(() => {
-        const session: UserSession = {
-          token: 'mock_jwt_buyer_' + Date.now(),
-          emailId: payload.emailId.trim().toLowerCase(),
-          userType: 'Buyer',
-          fullName: payload.fullName.trim(),
-          profileId: 102
-        };
-        this.setSession(session);
-        return of({
-          success: true,
-          message: 'Buyer account created (offline mode)',
-          data: session
-        });
       })
     );
   }
@@ -106,21 +43,6 @@ export class AuthService {
         if (res.success && res.data) {
           this.setSession(res.data);
         }
-      }),
-      catchError(() => {
-        const session: UserSession = {
-          token: 'mock_jwt_seller_' + Date.now(),
-          emailId: payload.emailId.trim().toLowerCase(),
-          userType: 'Seller',
-          fullName: payload.fullName.trim(),
-          profileId: 202
-        };
-        this.setSession(session);
-        return of({
-          success: true,
-          message: 'Seller account created (offline mode)',
-          data: session
-        });
       })
     );
   }
@@ -154,7 +76,6 @@ export class AuthService {
     try {
       let raw = sessionStorage.getItem(this.storageKey);
       if (!raw) {
-        // Safe migration from legacy localStorage if present
         raw = localStorage.getItem(this.storageKey);
         if (raw) {
           sessionStorage.setItem(this.storageKey, raw);

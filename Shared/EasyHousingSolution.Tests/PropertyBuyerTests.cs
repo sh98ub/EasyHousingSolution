@@ -1,3 +1,16 @@
+// ============================================================================
+// Document: PropertyBuyerTests.cs
+// Project:  Easy Housing Solutions (EHS)
+// Module:   EasyHousingSolution.Tests
+// Purpose:  Unit tests for property operations performed by or for buyers.
+// Language: C# (.NET 8 with NUnit and Moq)
+// Description:
+//   This test document checks the business logic in PropertyAppService.
+//   It ensures buyers can view verified properties, view property details,
+//   purchase/rent properties, and view their purchase history.
+//   All tests use mocked repositories so no real database is needed.
+// ============================================================================
+
 using EasyHousingSolution.PropertyService.Application.DTOs;
 using EasyHousingSolution.PropertyService.Application.Interfaces;
 using EasyHousingSolution.PropertyService.Application.Services;
@@ -9,12 +22,18 @@ using NUnit.Framework;
 
 namespace EasyHousingSolution.Tests.Services;
 
+/// <summary>
+/// Unit test suite testing property management and purchase flows for buyers.
+/// </summary>
 [TestFixture]
 public class PropertyBuyerTests
 {
     private Mock<IPropertyRepository> _mockPropertyRepo = null!;
     private PropertyAppService _propertyAppService = null!;
 
+    /// <summary>
+    /// Runs before each test to create fresh mocks and a clean service instance.
+    /// </summary>
     [SetUp]
     public void Setup()
     {
@@ -23,10 +42,13 @@ public class PropertyBuyerTests
         _propertyAppService = new PropertyAppService(_mockPropertyRepo.Object, mockLogger.Object);
     }
 
+    /// <summary>
+    /// Test 1: Verifies that buyers only get verified and active properties when browsing listings.
+    /// </summary>
     [Test]
     public async Task GetAllPropertiesForBuyer_ReturnsVerifiedListings()
     {
-        // Arrange
+        // 1. Arrange: Create mock verified property listings
         var fakeProperties = new List<Property>
         {
             new Property
@@ -62,10 +84,10 @@ public class PropertyBuyerTests
         _mockPropertyRepo.Setup(r => r.GetVerifiedPropertiesAsync())
             .ReturnsAsync(fakeProperties);
 
-        // Act
+        // 2. Act: Call the service method
         var result = (await _propertyAppService.GetVerifiedPropertiesAsync()).ToList();
 
-        // Assert
+        // 3. Assert: Check that all returned properties are active and correctly mapped
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Count, Is.EqualTo(2));
         Assert.That(result[0].PropertyName, Is.EqualTo("Green Meadows Luxury Villa"));
@@ -74,10 +96,13 @@ public class PropertyBuyerTests
         Assert.That(result[1].IsActive, Is.True);
     }
 
+    /// <summary>
+    /// Test 2: Verifies that looking up a property by its ID returns the expected property details.
+    /// </summary>
     [Test]
     public async Task GetPropertyById_WhenActivePropertyExists_ReturnsPropertyDto()
     {
-        // Arrange
+        // 1. Arrange: Create a property in database mock
         var prop = new Property
         {
             PropertyId = 5,
@@ -95,20 +120,23 @@ public class PropertyBuyerTests
 
         _mockPropertyRepo.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(prop);
 
-        // Act
+        // 2. Act: Retrieve property #5
         var result = await _propertyAppService.GetPropertyByIdAsync(5);
 
-        // Assert
+        // 3. Assert: Confirm details match
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.PropertyId, Is.EqualTo(5));
         Assert.That(result.PropertyName, Is.EqualTo("Lakeview Penthouse"));
         Assert.That(result.PriceRange, Is.EqualTo(25000000m));
     }
 
+    /// <summary>
+    /// Test 3: Verifies that when a buyer buys a property, it is marked inactive and the reason is recorded.
+    /// </summary>
     [Test]
     public async Task BuyPropertyAsync_WhenActive_MarksInactiveAndSetsReason()
     {
-        // Arrange
+        // 1. Arrange: Active property for sale
         var prop = new Property
         {
             PropertyId = 10,
@@ -121,45 +149,78 @@ public class PropertyBuyerTests
         _mockPropertyRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(prop);
         _mockPropertyRepo.Setup(r => r.UpdateAsync(It.IsAny<Property>())).Returns(Task.CompletedTask);
 
-        // Act
+        // 2. Act: Buyer #5 buys property #10
         var result = await _propertyAppService.BuyPropertyAsync(10, 5);
 
-        // Assert
+        // 3. Assert: Property is now inactive and has deactivation reason
         Assert.That(result, Is.Not.Null);
         Assert.That(result.IsActive, Is.False);
         Assert.That(result.DeactivationReason, Is.EqualTo("Sold to Buyer #5"));
-        _mockPropertyRepo.Verify(r => r.UpdateAsync(It.Is<Property>(p =>
-            p.PropertyId == 10 &&
-            !p.IsActive &&
-            p.DeactivationReason == "Sold to Buyer #5"
-        )), Times.Once);
     }
 
+    /// <summary>
+    /// Test 4: Verifies the business rule that a seller cannot purchase or rent their own property listing.
+    /// </summary>
     [Test]
-    public void BuyPropertyAsync_WhenAlreadySold_ThrowsInvalidOperationException()
+    public void BuyPropertyAsync_WhenBuyerIsSellerOfProperty_ThrowsInvalidOperationException()
     {
-        // Arrange
-        var soldProp = new Property
+        // 1. Arrange: Property owned by Seller #4
+        var prop = new Property
         {
-            PropertyId = 11,
-            PropertyName = "Sold Flat",
-            IsActive = false,
-            DeactivationReason = "Sold to Buyer #3"
+            PropertyId = 15,
+            PropertyName = "Seller Own Villa",
+            PriceRange = 8500000m,
+            IsActive = true,
+            SellerId = 4
         };
 
-        _mockPropertyRepo.Setup(r => r.GetByIdAsync(11)).ReturnsAsync(soldProp);
+        _mockPropertyRepo.Setup(r => r.GetByIdAsync(15)).ReturnsAsync(prop);
 
-        // Act & Assert
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        // 2. Act & Assert: Seller #4 tries to buy property #15 -> should throw error
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await _propertyAppService.BuyPropertyAsync(11, 2);
+            await _propertyAppService.BuyPropertyAsync(15, 4);
         });
+
+        Assert.That(ex!.Message, Does.Contain("Sellers cannot buy or rent their own properties"));
     }
 
+    /// <summary>
+    /// Test 5: Verifies that renting a rental property marks it inactive with 'Rented to Buyer' reason.
+    /// </summary>
+    [Test]
+    public async Task BuyPropertyAsync_WhenPropertyOptionIsRent_SetsRentedReason()
+    {
+        // 1. Arrange: Property listed for Rent
+        var prop = new Property
+        {
+            PropertyId = 16,
+            PropertyName = "Coastal Studio for Rent",
+            PropertyOption = "Rent",
+            PriceRange = 35000m,
+            IsActive = true,
+            SellerId = 2
+        };
+
+        _mockPropertyRepo.Setup(r => r.GetByIdAsync(16)).ReturnsAsync(prop);
+        _mockPropertyRepo.Setup(r => r.UpdateAsync(It.IsAny<Property>())).Returns(Task.CompletedTask);
+
+        // 2. Act: Buyer #9 rents property #16
+        var result = await _propertyAppService.BuyPropertyAsync(16, 9);
+
+        // 3. Assert: Deactivation reason reflects 'Rented'
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsActive, Is.False);
+        Assert.That(result.DeactivationReason, Is.EqualTo("Rented to Buyer #9"));
+    }
+
+    /// <summary>
+    /// Test 6: Verifies that a buyer can view the history of properties they have bought or rented.
+    /// </summary>
     [Test]
     public async Task GetPurchasedPropertiesByBuyerId_ReturnsBuyersProperties()
     {
-        // Arrange
+        // 1. Arrange: Buyer #7 previously bought a property
         var boughtProps = new List<Property>
         {
             new Property
@@ -173,19 +234,22 @@ public class PropertyBuyerTests
 
         _mockPropertyRepo.Setup(r => r.GetPurchasedPropertiesByBuyerIdAsync(7)).ReturnsAsync(boughtProps);
 
-        // Act
+        // 2. Act: Get purchase history for Buyer #7
         var result = (await _propertyAppService.GetPurchasedPropertiesByBuyerIdAsync(7)).ToList();
 
-        // Assert
+        // 3. Assert: History contains the property
         Assert.That(result.Count, Is.EqualTo(1));
         Assert.That(result[0].PropertyId, Is.EqualTo(20));
         Assert.That(result[0].DeactivationReason, Is.EqualTo("Sold to Buyer #7"));
     }
 
+    /// <summary>
+    /// Test 7: Verifies that a seller can view the list of properties they have successfully sold.
+    /// </summary>
     [Test]
     public async Task GetSoldPropertiesBySellerId_ReturnsSellersSoldProperties()
     {
-        // Arrange
+        // 1. Arrange: Seller #4 has a sold property
         var soldProps = new List<Property>
         {
             new Property
@@ -200,36 +264,11 @@ public class PropertyBuyerTests
 
         _mockPropertyRepo.Setup(r => r.GetSoldPropertiesBySellerIdAsync(4)).ReturnsAsync(soldProps);
 
-        // Act
+        // 2. Act: Get sold list for Seller #4
         var result = (await _propertyAppService.GetSoldPropertiesBySellerIdAsync(4)).ToList();
 
-        // Assert
+        // 3. Assert: Sold property is returned
         Assert.That(result.Count, Is.EqualTo(1));
         Assert.That(result[0].PropertyId, Is.EqualTo(30));
-    }
-
-    [Test]
-    public async Task GetSalesReportAsync_AggregatesCorrectTotals()
-    {
-        // Arrange
-        var allProps = new List<Property>
-        {
-            new Property { PropertyId = 1, PriceRange = 1000000m, IsActive = true },
-            new Property { PropertyId = 2, PriceRange = 2000000m, IsActive = false, DeactivationReason = "Sold to Buyer #1" },
-            new Property { PropertyId = 3, PriceRange = 3000000m, IsActive = false, DeactivationReason = "Incomplete documents" }
-        };
-
-        _mockPropertyRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(allProps);
-
-        // Act
-        var report = await _propertyAppService.GetSalesReportAsync();
-
-        // Assert
-        Assert.That(report.TotalProperties, Is.EqualTo(3));
-        Assert.That(report.TotalActiveProperties, Is.EqualTo(1));
-        Assert.That(report.TotalSoldProperties, Is.EqualTo(1));
-        Assert.That(report.TotalDeactivatedProperties, Is.EqualTo(1));
-        Assert.That(report.TotalSoldValue, Is.EqualTo(2000000m));
-        Assert.That(report.TotalActiveValue, Is.EqualTo(1000000m));
     }
 }

@@ -31,25 +31,40 @@ public static class JwtAuthenticationExtensions
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = issuer,
                 ValidAudience = audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+                RoleClaimType = System.Security.Claims.ClaimTypes.Role
             };
 
             options.Events = new JwtBearerEvents
             {
                 OnMessageReceived = context =>
                 {
-                    var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+                    var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
                     if (!string.IsNullOrEmpty(authHeader))
                     {
                         var trimmed = authHeader.Trim();
-                        if (trimmed.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        // Automatically strip "Bearer " if present; otherwise use the raw token as-is
+                        context.Token = trimmed.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                            ? trimmed["Bearer ".Length..].Trim()
+                            : trimmed;
+                    }
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
+                    {
+                        var role = identity.FindFirst("role")?.Value ?? identity.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+                        if (!string.IsNullOrEmpty(role))
                         {
-                            context.Token = trimmed.Substring("Bearer ".Length).Trim();
-                        }
-                        else if (!trimmed.Contains(' ') && trimmed.Split('.').Length == 3)
-                        {
-                            // Handles raw JWT token entered directly without "Bearer " prefix
-                            context.Token = trimmed;
+                            if (!identity.HasClaim(System.Security.Claims.ClaimTypes.Role, role))
+                            {
+                                identity.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role));
+                            }
+                            if (!identity.HasClaim("role", role))
+                            {
+                                identity.AddClaim(new System.Security.Claims.Claim("role", role));
+                            }
                         }
                     }
                     return Task.CompletedTask;

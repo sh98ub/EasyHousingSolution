@@ -6,7 +6,7 @@ namespace EasyHousingSolution.PropertyService.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[ApiExplorerSettings(IgnoreApi = true)]
+[Tags("Location")]
 public class StatesController : ControllerBase
 {
     private readonly ILocationAppService _locationService;
@@ -22,18 +22,11 @@ public class StatesController : ControllerBase
         var states = await _locationService.GetAllStatesAsync();
         return Ok(states);
     }
-
-    [HttpPost]
-    public async Task<IActionResult> CreateState(StateDto dto)
-    {
-        var created = await _locationService.CreateStateAsync(dto);
-        return CreatedAtAction(nameof(GetAllStates), created);
-    }
 }
 
 [ApiController]
 [Route("api/[controller]")]
-[ApiExplorerSettings(IgnoreApi = true)]
+[Tags("Location")]
 public class CitiesController : ControllerBase
 {
     private readonly ILocationAppService _locationService;
@@ -48,19 +41,5 @@ public class CitiesController : ControllerBase
     {
         var cities = await _locationService.GetAllCitiesAsync();
         return Ok(cities);
-    }
-
-    [HttpGet("by-state/{stateId:int}")]
-    public async Task<IActionResult> GetCitiesByState(int stateId)
-    {
-        var cities = await _locationService.GetCitiesByStateIdAsync(stateId);
-        return Ok(cities);
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> CreateCity(CityDto dto)
-    {
-        var created = await _locationService.CreateCityAsync(dto);
-        return CreatedAtAction(nameof(GetAllCities), created);
     }
 }

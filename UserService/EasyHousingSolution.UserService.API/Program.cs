@@ -94,11 +94,4 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Ensure database created
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-    try { db.Database.EnsureCreated(); } catch { }
-}
-
 app.Run("http://localhost:5003");

@@ -1,3 +1,18 @@
+// ============================================================================
+// Document: Program.cs
+// Project:  Easy Housing Solutions (EHS)
+// Module:   ApiGateway
+// Purpose:  Entry point and reverse-proxy configuration for all microservices.
+// Language: C# (.NET 8 with Ocelot & ASP.NET Core)
+// Description:
+//   Acts as the central gateway (port 5000) routing incoming requests to:
+//   - IdentityService (:5001)
+//   - PropertyService (:5002)
+//   - UserService     (:5003)
+//   - CartService     (:5004)
+//   Also handles CORS, unified Swagger documentation, and centralized Serilog logging.
+// ============================================================================
+
 using EasyHousingSolution.Shared.Logging;
 using EasyHousingSolution.Shared.Middleware;
 using Ocelot.DependencyInjection;

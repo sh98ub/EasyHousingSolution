@@ -7,7 +7,6 @@ namespace EasyHousingSolution.PropertyService.API.Controllers;
 
 [ApiController]
 [Route("api/properties/{propertyId:int}/[controller]")]
-[ApiExplorerSettings(IgnoreApi = true)]
 public class ImagesController : ControllerBase
 {
     private readonly IImageAppService _imageService;
@@ -28,10 +27,21 @@ public class ImagesController : ControllerBase
 
     [HttpPost]
     [Tags("Seller")]
-    [Authorize(Roles = "Seller")]
+    [Authorize(Roles = "Seller,Admin")]
     public async Task<IActionResult> UploadImages(int propertyId, UploadImagesDto dto)
     {
         var uploaded = await _imageService.UploadImagesAsync(propertyId, dto.Images);
         return Ok(uploaded);
+    }
+
+    [HttpDelete("{imageId:int}")]
+    [Tags("Seller")]
+    [Authorize(Roles = "Seller,Admin")]
+    public async Task<IActionResult> DeleteImage(int propertyId, int imageId)
+    {
+        var deleted = await _imageService.DeleteImageAsync(propertyId, imageId);
+        return deleted
+            ? Ok(new { success = true, message = "Image deleted successfully." })
+            : NotFound(new { success = false, message = $"Image #{imageId} not found for Property #{propertyId}." });
     }
 }

@@ -27,6 +27,9 @@ export interface Property {
   deactivationReason?: string;
   sellerId: number;
   cityId: number;
+  primaryImage?: string;
+  imageCount?: number;
+  images?: string[];
 }
 
 export interface PropertyImage {

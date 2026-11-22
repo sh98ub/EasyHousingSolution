@@ -90,16 +90,6 @@ public class SellerResponseDto
     public string EmailId { get; set; } = string.Empty;
 }
 
-public class SellerContactDto
-{
-    public int SellerId { get; set; }
-    public string FullName { get; set; } = string.Empty;
-    public string FirstName { get; set; } = string.Empty;
-    public string? LastName { get; set; }
-    public string PhoneNo { get; set; } = string.Empty;
-    public string EmailId { get; set; } = string.Empty;
-}
-
 public class UserSummaryDto
 {
     public int ProfileId { get; set; }
@@ -166,5 +156,19 @@ public class UpdateSellerProfileDto
 public class UserStatusUpdateDto
 {
     public bool IsActive { get; set; }
+    public string? Reason { get; set; }
+}
+
+public class UserActivationDto
+{
+    public string? Reason { get; set; }
+}
+
+public class ChangeUserRoleDto
+{
+    [Required(ErrorMessage = "New role is required.")]
+    [RegularExpression("^(Admin|Buyer|Seller)$", ErrorMessage = "Role must be 'Admin', 'Buyer', or 'Seller'.")]
+    public string NewRole { get; set; } = string.Empty;
+
     public string? Reason { get; set; }
 }

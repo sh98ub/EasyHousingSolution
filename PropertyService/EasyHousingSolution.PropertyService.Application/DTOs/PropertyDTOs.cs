@@ -33,11 +33,13 @@ public class CreatePropertyDto
     [StringLength(25)]
     public string Landmark { get; set; } = string.Empty;
 
-    [Required]
     public int SellerId { get; set; }
 
     [Required]
     public int CityId { get; set; }
+
+    [MaxLength(6)]
+    public List<string> Images { get; set; } = new();
 }
 
 public class UpdatePropertyDto
@@ -82,12 +84,6 @@ public class DeactivatePropertyDto
     public string Reason { get; set; } = string.Empty;
 }
 
-public class PropertyStatusUpdateDto
-{
-    public bool IsActive { get; set; }
-    public string? Reason { get; set; }
-}
-
 public class PropertyResponseDto
 {
     public int PropertyId { get; set; }
@@ -103,6 +99,9 @@ public class PropertyResponseDto
     public string? DeactivationReason { get; set; }
     public int SellerId { get; set; }
     public int CityId { get; set; }
+    public string? PrimaryImage { get; set; }
+    public int ImageCount { get; set; }
+    public List<string> Images { get; set; } = new();
 }
 
 public class StateDto
@@ -142,15 +141,4 @@ public class UploadImagesDto
 public class BuyPropertyDto
 {
     public int? BuyerId { get; set; }
-}
-
-public class AdminSalesReportDto
-{
-    public int TotalProperties { get; set; }
-    public int TotalActiveProperties { get; set; }
-    public int TotalSoldProperties { get; set; }
-    public int TotalDeactivatedProperties { get; set; }
-    public decimal TotalSoldValue { get; set; }
-    public decimal TotalActiveValue { get; set; }
-    public List<PropertyResponseDto> SoldProperties { get; set; } = new();
 }

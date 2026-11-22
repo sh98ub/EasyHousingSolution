@@ -1,0 +1,304 @@
+<div class="landing-auth-wrapper">
+  <div class="auth-card">
+    <!-- Brand Header -->
+    <div class="auth-header">
+      <div class="brand-logo-badge">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 10.5L12 3L21 10.5V20C21 20.5523 20.5523 21 20 21H15V14H9V21H4C3.44772 21 3 20.5523 3 20V10.5Z" fill="#ffffff" />
+          <path d="M9 21V14H15V21H9Z" fill="#008cff" />
+        </svg>
+      </div>
+      <h1 class="brand-title">easy<span class="highlight">housing</span></h1>
+      <p class="brand-subtitle">
+        {{ activeTab === 'login' ? 'Sign in to access your dashboard' : (activeTab === 'buyer' ? 'Create your buyer account' : 'Register as an authorized seller') }}
+      </p>
+    </div>
+
+    <!-- Tab Selector: Login vs Register Buyer vs Register Seller -->
+    <div class="auth-tabs">
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeTab === 'login'"
+        (click)="setTab('login')"
+      >
+        Login
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeTab === 'buyer'"
+        (click)="setTab('buyer')"
+      >
+        Register Buyer
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeTab === 'seller'"
+        (click)="setTab('seller')"
+      >
+        Register Seller
+      </button>
+    </div>
+
+    <!-- Alert Banners -->
+    @if (errorMessage()) {
+      <div class="alert alert-error">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+    @if (successMessage()) {
+      <div class="alert alert-success">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        <span>{{ successMessage() }}</span>
+      </div>
+    }
+
+    <!-- 1. LOGIN FORM -->
+    @if (activeTab === 'login') {
+      <form (ngSubmit)="handleLogin()" class="form-body">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input
+            type="email"
+            class="form-control"
+            placeholder="name@example.com"
+            [(ngModel)]="loginEmail"
+            name="email"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            class="form-control"
+            placeholder="Enter password"
+            [(ngModel)]="loginPassword"
+            name="password"
+            required
+          />
+        </div>
+
+        <button type="submit" class="btn-submit" [disabled]="loading()">
+          {{ loading() ? 'Signing In...' : 'LOGIN' }}
+        </button>
+
+        <!-- Quick Demo Credentials Chips for Effortless Testing -->
+        <div class="demo-helpers">
+          <span class="demo-label">Quick fill:</span>
+          <button type="button" class="demo-chip admin" (click)="fillDemo('admin')">Admin</button>
+          <button type="button" class="demo-chip seller" (click)="fillDemo('seller')">Seller</button>
+          <button type="button" class="demo-chip buyer" (click)="fillDemo('buyer')">Buyer</button>
+        </div>
+      </form>
+    }
+
+    <!-- 2. REGISTER BUYER FORM -->
+    @if (activeTab === 'buyer') {
+      <form (ngSubmit)="handleRegisterBuyer()" class="form-body">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input
+            type="text"
+            class="form-control"
+            placeholder="e.g. Rahul Sharma"
+            [(ngModel)]="buyerName"
+            name="buyerName"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Email ID *</label>
+          <input
+            type="email"
+            class="form-control"
+            placeholder="rahul@example.com"
+            [(ngModel)]="buyerEmail"
+            name="buyerEmail"
+            required
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label>Mobile Number *</label>
+            <input
+              type="tel"
+              class="form-control"
+              placeholder="10 digits (6-9)"
+              [(ngModel)]="buyerPhone"
+              name="buyerPhone"
+              maxlength="10"
+              required
+            />
+          </div>
+
+          <div class="form-group half">
+            <label>Date of Birth *</label>
+            <input
+              type="date"
+              class="form-control"
+              [(ngModel)]="buyerDob"
+              name="buyerDob"
+              [max]="maxDobDate"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Create Password *</label>
+          <input
+            type="password"
+            class="form-control"
+            placeholder="Minimum 8 characters"
+            [(ngModel)]="buyerPassword"
+            name="buyerPassword"
+            required
+          />
+        </div>
+
+        <button type="submit" class="btn-submit" [disabled]="loading()">
+          {{ loading() ? 'Creating Buyer Account...' : 'CREATE BUYER ACCOUNT' }}
+        </button>
+      </form>
+    }
+
+    <!-- 3. REGISTER SELLER FORM -->
+    @if (activeTab === 'seller') {
+      <form (ngSubmit)="handleRegisterSeller()" class="form-body">
+        <div class="form-group">
+          <label>Seller / Company Name *</label>
+          <input
+            type="text"
+            class="form-control"
+            placeholder="e.g. Ramesh Kulkarni"
+            [(ngModel)]="sellerName"
+            name="sellerName"
+            required
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label>Email ID *</label>
+            <input
+              type="email"
+              class="form-control"
+              placeholder="ramesh@example.com"
+              [(ngModel)]="sellerEmail"
+              name="sellerEmail"
+              required
+            />
+          </div>
+
+          <div class="form-group half">
+            <label>Phone Number *</label>
+            <input
+              type="tel"
+              class="form-control"
+              placeholder="10 digits (6-9)"
+              [(ngModel)]="sellerPhone"
+              name="sellerPhone"
+              maxlength="10"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Street Address *</label>
+          <input
+            type="text"
+            class="form-control"
+            placeholder="Complete office or property address"
+            [(ngModel)]="sellerAddress"
+            name="sellerAddress"
+            required
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label>State *</label>
+            <select
+              class="form-control"
+              [(ngModel)]="sellerStateId"
+              name="sellerState"
+              (change)="onSellerStateChange()"
+              required
+            >
+              <option [ngValue]="null">Select State</option>
+              @for (s of states(); track s.stateId) {
+                <option [ngValue]="s.stateId">{{ s.stateName }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-group half">
+            <label>City *</label>
+            <select
+              class="form-control"
+              [(ngModel)]="sellerCityId"
+              name="sellerCity"
+              [disabled]="!sellerStateId"
+              required
+            >
+              <option [ngValue]="null">Select City</option>
+              @for (c of filteredSellerCities; track c.cityId) {
+                <option [ngValue]="c.cityId">{{ c.cityName }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label>Date of Birth *</label>
+            <input
+              type="date"
+              class="form-control"
+              [(ngModel)]="sellerDob"
+              name="sellerDob"
+              [max]="maxDobDate"
+              required
+            />
+          </div>
+
+          <div class="form-group half">
+            <label>Password *</label>
+            <input
+              type="password"
+              class="form-control"
+              placeholder="Minimum 8 characters"
+              [(ngModel)]="sellerPassword"
+              name="sellerPassword"
+              required
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit" [disabled]="loading()">
+          {{ loading() ? 'Registering Seller...' : 'CREATE SELLER ACCOUNT' }}
+        </button>
+      </form>
+    }
+
+    <!-- Subtle Guest Link at Bottom -->
+    <div class="guest-footer">
+      <span>Just browsing?</span>
+      <button type="button" class="btn-guest-link" (click)="browseMarketplace.emit()">
+        Explore marketplace as guest &rarr;
+      </button>
+    </div>
+  </div>
+</div>

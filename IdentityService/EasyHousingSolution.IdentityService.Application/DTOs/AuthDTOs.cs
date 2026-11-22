@@ -69,19 +69,32 @@ public class RegisterSellerDto
     [StringLength(50, MinimumLength = 6)]
     public string Password { get; set; } = string.Empty;
 
+    [Required]
     [StringLength(25)]
-    public string? FirstName { get; set; }
+    public string FirstName { get; set; } = string.Empty;
 
     [StringLength(25)]
     public string? LastName { get; set; }
 
-    public DateTime? DateofBirth { get; set; }
+    [Required(ErrorMessage = "Date of birth (e.g. 15-05-1995) is required.")]
+    public string Dob { get; set; } = string.Empty;
 
-    public string? Dob { get; set; }
+    [Required(ErrorMessage = "Phone number is required.")]
+    [RegularExpression(@"^[6-9][0-9]{9}$", ErrorMessage = "Phone number must be exactly 10 digits starting with 6, 7, 8, or 9.")]
+    public string PhoneNo { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(250)]
+    public string Address { get; set; } = string.Empty;
+
+    [Required]
+    public int StateId { get; set; }
+
+    [Required]
+    public int CityId { get; set; }
 
     public DateTime GetParsedDateOfBirth()
     {
-        if (DateofBirth.HasValue) return DateofBirth.Value;
         if (string.IsNullOrWhiteSpace(Dob))
         {
             throw new ArgumentException("Date of birth is required.");
@@ -109,23 +122,6 @@ public class RegisterSellerDto
 
         throw new ArgumentException($"Invalid date format for '{rawDob}'. Please enter Date of Birth as Day-Month-Year (e.g. 15-05-1995).");
     }
-
-    [StringLength(50)]
-    public string FullName { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Phone number is required.")]
-    [RegularExpression(@"^[6-9][0-9]{9}$", ErrorMessage = "Phone number must be exactly 10 digits starting with 6, 7, 8, or 9.")]
-    public string PhoneNo { get; set; } = string.Empty;
-
-    [Required]
-    [StringLength(250)]
-    public string Address { get; set; } = string.Empty;
-
-    [Required]
-    public int StateId { get; set; }
-
-    [Required]
-    public int CityId { get; set; }
 }
 
 public class LoginDto
@@ -147,12 +143,10 @@ public class AuthResponseDto
     public int? ProfileId { get; set; }
 }
 
-public class UserDto
+public class UserProfileResponseDto
 {
-    public string UserName { get; set; } = string.Empty;
-    public string EmailId { get; set; } = string.Empty;
-    public string UserType { get; set; } = string.Empty;
-    public string FullName { get; set; } = string.Empty;
-    public string PhoneNo { get; set; } = string.Empty;
-    public int? ProfileId { get; set; }
+    public int? BuyerId { get; set; }
+    public int? SellerId { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
 }

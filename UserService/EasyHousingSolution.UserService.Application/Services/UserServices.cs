@@ -54,20 +54,8 @@ public class BuyerAppService : IBuyerAppService
 
     public async Task<BuyerResponseDto?> GetBuyerByEmailAsync(string emailId)
     {
-        var buyer = await _buyerRepository.GetByEmailAsync(emailId.Trim().ToLowerInvariant());
+        var buyer = await _buyerRepository.GetByEmailAsync(emailId);
         return buyer == null ? null : MapToDto(buyer);
-    }
-
-    public async Task<BuyerResponseDto?> GetBuyerByUserNameAsync(string userName)
-    {
-        var buyer = await _buyerRepository.GetByUserNameAsync(userName.Trim());
-        return buyer == null ? null : MapToDto(buyer);
-    }
-
-    public async Task<IEnumerable<BuyerResponseDto>> GetAllBuyersAsync()
-    {
-        var buyers = await _buyerRepository.GetAllAsync();
-        return buyers.Select(MapToDto);
     }
 
     public async Task<BuyerResponseDto?> UpdateBuyerProfileAsync(int buyerId, UpdateBuyerProfileDto dto)
@@ -85,15 +73,6 @@ public class BuyerAppService : IBuyerAppService
 
         await _buyerRepository.UpdateAsync(buyer);
         return MapToDto(buyer);
-    }
-
-    public async Task<bool> DeleteBuyerAsync(int buyerId)
-    {
-        var buyer = await _buyerRepository.GetByIdAsync(buyerId);
-        if (buyer == null) return false;
-
-        await _buyerRepository.DeleteAsync(buyer);
-        return true;
     }
 
     private static BuyerResponseDto MapToDto(Buyer b) => new()
@@ -159,35 +138,8 @@ public class SellerAppService : ISellerAppService
 
     public async Task<SellerResponseDto?> GetSellerByEmailAsync(string emailId)
     {
-        var seller = await _sellerRepository.GetByEmailAsync(emailId.Trim().ToLowerInvariant());
+        var seller = await _sellerRepository.GetByEmailAsync(emailId);
         return seller == null ? null : MapToDto(seller);
-    }
-
-    public async Task<SellerResponseDto?> GetSellerByUserNameAsync(string userName)
-    {
-        var seller = await _sellerRepository.GetByUserNameAsync(userName.Trim());
-        return seller == null ? null : MapToDto(seller);
-    }
-
-    public async Task<SellerContactDto?> GetSellerContactAsync(int sellerId)
-    {
-        var seller = await _sellerRepository.GetByIdAsync(sellerId);
-        if (seller == null) return null;
-
-        return new SellerContactDto
-        {
-            SellerId = seller.SellerId,
-            FullName = string.IsNullOrWhiteSpace(seller.LastName) ? seller.FirstName : $"{seller.FirstName} {seller.LastName}".Trim(),
-            EmailId = seller.EmailId,
-            PhoneNo = seller.PhoneNo,
-            Address = seller.Address
-        };
-    }
-
-    public async Task<IEnumerable<SellerResponseDto>> GetAllSellersAsync()
-    {
-        var sellers = await _sellerRepository.GetAllAsync();
-        return sellers.Select(MapToDto);
     }
 
     public async Task<SellerResponseDto?> UpdateSellerProfileAsync(int sellerId, UpdateSellerProfileDto dto)
@@ -204,15 +156,6 @@ public class SellerAppService : ISellerAppService
 
         await _sellerRepository.UpdateAsync(seller);
         return MapToDto(seller);
-    }
-
-    public async Task<bool> DeleteSellerAsync(int sellerId)
-    {
-        var seller = await _sellerRepository.GetByIdAsync(sellerId);
-        if (seller == null) return false;
-
-        await _sellerRepository.DeleteAsync(seller);
-        return true;
     }
 
     private static SellerResponseDto MapToDto(Seller s) => new()
@@ -236,6 +179,7 @@ public class UserAppService : IUserAppService
     private readonly ISellerRepository _sellerRepository;
 
     private static readonly ConcurrentDictionary<string, bool> _userStatus = new();
+    private static readonly ConcurrentDictionary<string, string> _userRoles = new();
 
     public UserAppService(IBuyerRepository buyerRepository, ISellerRepository sellerRepository)
     {
@@ -249,6 +193,7 @@ public class UserAppService : IUserAppService
 
         var adminKey = "user_1_admin";
         var adminActive = _userStatus.GetOrAdd(adminKey, true);
+        var adminRole = _userRoles.TryGetValue("user_1", out var ar) ? ar : "Admin";
 
         list.Add(new UserSummaryDto
         {
@@ -257,7 +202,7 @@ public class UserAppService : IUserAppService
             FullName = "System Administrator",
             EmailId = "admin@easysolution.com",
             PhoneNo = "9999999999",
-            UserType = "Admin",
+            UserType = adminRole,
             Address = "Headquarters, Mumbai",
             IsActive = adminActive
         });
@@ -268,6 +213,7 @@ public class UserAppService : IUserAppService
             var key = $"buyer_{b.BuyerId}";
             var active = _userStatus.GetOrAdd(key, true);
             var fullName = string.IsNullOrWhiteSpace(b.LastName) ? b.FirstName : $"{b.FirstName} {b.LastName}".Trim();
+            var userRole = _userRoles.TryGetValue($"user_{b.BuyerId}", out var r) ? r : (_userRoles.TryGetValue(key, out var br) ? br : "Buyer");
 
             list.Add(new UserSummaryDto
             {
@@ -276,7 +222,7 @@ public class UserAppService : IUserAppService
                 FullName = fullName,
                 EmailId = b.EmailId,
                 PhoneNo = b.PhoneNo,
-                UserType = "Buyer",
+                UserType = userRole,
                 Address = "India",
                 IsActive = active
             });
@@ -288,6 +234,7 @@ public class UserAppService : IUserAppService
             var key = $"seller_{s.SellerId}";
             var active = _userStatus.GetOrAdd(key, true);
             var fullName = string.IsNullOrWhiteSpace(s.LastName) ? s.FirstName : $"{s.FirstName} {s.LastName}".Trim();
+            var userRole = _userRoles.TryGetValue($"user_{s.SellerId}", out var r) ? r : (_userRoles.TryGetValue(key, out var sr) ? sr : "Seller");
 
             list.Add(new UserSummaryDto
             {
@@ -296,7 +243,7 @@ public class UserAppService : IUserAppService
                 FullName = fullName,
                 EmailId = s.EmailId,
                 PhoneNo = s.PhoneNo,
-                UserType = "Seller",
+                UserType = userRole,
                 Address = s.Address,
                 IsActive = active
             });
@@ -321,14 +268,7 @@ public class UserAppService : IUserAppService
         return users.FirstOrDefault(u => u.ProfileId == userId);
     }
 
-    public async Task<UserSummaryDto?> GetUserByUserNameAsync(string userName)
-    {
-        var users = await GetAllUsersAsync();
-        return users.FirstOrDefault(u => string.Equals(u.UserName, userName, StringComparison.OrdinalIgnoreCase)
-                                      || string.Equals(u.EmailId, userName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public async Task<bool> UpdateUserStatusAsync(int userId, bool isActive, string? reason)
+    public async Task<bool> UpdateUserStatusAsync(int userId, bool isActive, string? reason = null)
     {
         var user = await GetUserByIdAsync(userId);
         if (user == null) return false;
@@ -341,6 +281,31 @@ public class UserAppService : IUserAppService
         };
 
         _userStatus[key] = isActive;
+        _userStatus[$"user_{userId}"] = isActive;
+        return true;
+    }
+
+    public async Task<bool> ChangeUserRoleAsync(int userId, string newRole, string? reason = null)
+    {
+        var user = await GetUserByIdAsync(userId);
+        if (user == null) return false;
+
+        if (!new[] { "Admin", "Buyer", "Seller" }.Any(r => string.Equals(r, newRole, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new ArgumentException("Role must be 'Admin', 'Buyer', or 'Seller'.");
+        }
+
+        var formattedRole = char.ToUpperInvariant(newRole[0]) + newRole.Substring(1).ToLowerInvariant();
+        _userRoles[$"user_{userId}"] = formattedRole;
+
+        var key = user.UserType.ToLower() switch
+        {
+            "admin" => "user_1_admin",
+            "seller" => $"seller_{userId}",
+            _ => $"buyer_{userId}"
+        };
+        _userRoles[key] = formattedRole;
+
         return true;
     }
 
@@ -351,6 +316,8 @@ public class UserAppService : IUserAppService
         {
             await _buyerRepository.DeleteAsync(buyer);
             _userStatus.TryRemove($"buyer_{userId}", out _);
+            _userRoles.TryRemove($"buyer_{userId}", out _);
+            _userRoles.TryRemove($"user_{userId}", out _);
             return true;
         }
 
@@ -359,6 +326,8 @@ public class UserAppService : IUserAppService
         {
             await _sellerRepository.DeleteAsync(seller);
             _userStatus.TryRemove($"seller_{userId}", out _);
+            _userRoles.TryRemove($"seller_{userId}", out _);
+            _userRoles.TryRemove($"user_{userId}", out _);
             return true;
         }
 

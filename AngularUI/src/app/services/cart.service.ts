@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, tap, catchError } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { ApiResponse, EnrichedCartItem, Property } from '../models/models';
 
 @Injectable({
@@ -8,163 +8,41 @@ import { ApiResponse, EnrichedCartItem, Property } from '../models/models';
 })
 export class CartService {
   private readonly baseUrl = 'http://localhost:5000/api/cart';
-  private readonly storageKey = 'ehs_local_cart';
 
-  readonly cartItems = signal<EnrichedCartItem[]>(this.loadLocalCart());
-  readonly cartCount = signal<number>(this.loadLocalCart().length);
+  readonly cartItems = signal<EnrichedCartItem[]>([]);
+  readonly cartCount = signal<number>(0);
 
   constructor(private http: HttpClient) {}
 
-  getMyCart(): Observable<ApiResponse<EnrichedCartItem[]>> {
-    return this.getBuyerCart();
-  }
-
   getBuyerCart(buyerId?: number): Observable<ApiResponse<EnrichedCartItem[]>> {
-    const url = this.baseUrl;
+    const url = (buyerId && buyerId > 0)
+      ? `${this.baseUrl}/buyer/${buyerId}`
+      : this.baseUrl;
     return this.http.get<ApiResponse<EnrichedCartItem[]>>(url).pipe(
       tap(res => {
         if (res.success && res.data) {
           this.cartItems.set(res.data);
           this.cartCount.set(res.data.length);
-          this.saveLocalCart(res.data);
         }
-      }),
-      catchError(() => {
-        const targetId = buyerId || 1;
-        let local = this.loadLocalCart().filter(i => i.buyerId === targetId);
-        const isInit = sessionStorage.getItem('ehs_cart_initialized') || localStorage.getItem('ehs_cart_initialized');
-        if (local.length === 0 && targetId === 1 && !isInit) {
-          local = [
-            {
-              cartId: 1,
-              buyerId: 1,
-              propertyId: 1,
-              property: {
-                propertyId: 1,
-                propertyName: 'Sobha Dream Acres 3BHK',
-                propertyType: 'Apartment',
-                propertyOption: 'Sell',
-                address: 'Tower 4, Panathur Road, Balagere',
-                priceRange: 8500000,
-                initialDeposit: 0,
-                landmark: 'Outer Ring Road Tech Park',
-                isActive: true,
-                sellerId: 1,
-                cityId: 3
-              }
-            },
-            {
-              cartId: 2,
-              buyerId: 1,
-              propertyId: 3,
-              property: {
-                propertyId: 3,
-                propertyName: 'Hiranandani Lakeview 2BHK',
-                propertyType: 'Apartment',
-                propertyOption: 'Rent',
-                address: 'Castle Rock, Central Ave',
-                priceRange: 55000,
-                initialDeposit: 150000,
-                landmark: 'Powai Lake',
-                isActive: true,
-                sellerId: 2,
-                cityId: 1
-              }
-            }
-          ];
-          try {
-            sessionStorage.setItem('ehs_cart_initialized', 'true');
-            localStorage.removeItem('ehs_cart_initialized');
-          } catch {}
-          this.saveLocalCart(local);
-        }
-        this.cartItems.set(local);
-        this.cartCount.set(local.length);
-        return of({
-          success: true,
-          message: 'Loaded cart from local cache',
-          data: local
-        });
       })
     );
   }
 
   addToCart(buyerId: number, propertyId: number, propertyData?: Property): Observable<ApiResponse<any>> {
     return this.http.post<ApiResponse<any>>(`${this.baseUrl}/items`, { propertyId }).pipe(
-      tap(() => this.getBuyerCart(buyerId).subscribe()),
-      catchError(() => {
-        const current = this.loadLocalCart();
-        const existing = current.find(i => i.propertyId === propertyId && i.buyerId === buyerId);
-        if (!existing) {
-          const newItem: EnrichedCartItem = {
-            cartId: Date.now(),
-            buyerId,
-            propertyId,
-            property: propertyData
-          };
-          current.push(newItem);
-          this.saveLocalCart(current);
-          this.cartItems.set(current);
-          this.cartCount.set(current.length);
-        }
-        return of({
-          success: true,
-          message: 'Item added to cart',
-          data: { buyerId, propertyId }
-        });
-      })
+      tap(() => this.getBuyerCart(buyerId).subscribe())
     );
   }
 
   removeFromCart(cartId: number, buyerId: number, propertyId?: number): Observable<ApiResponse<boolean>> {
-    // Optimistically update local cart signals
-    const filtered = this.loadLocalCart().filter(i => i.cartId !== cartId);
-    this.saveLocalCart(filtered);
-    this.cartItems.set(filtered);
-    this.cartCount.set(filtered.length);
-
-    const targetPropId = propertyId || cartId;
-    return this.http.delete<any>(`${this.baseUrl}/items/${targetPropId}`, { responseType: 'text' as 'json' }).pipe(
-      tap(() => this.getBuyerCart(buyerId).subscribe()),
-      catchError(() => {
-        return of({
-          success: true,
-          message: 'Item removed from cart',
-          data: true
-        });
-      })
+    const targetPropId = (propertyId && propertyId > 0) ? propertyId : cartId;
+    return this.http.delete<any>(`${this.baseUrl}/items/${targetPropId}`).pipe(
+      tap(() => this.getBuyerCart(buyerId).subscribe())
     );
   }
 
   clearCart(): void {
-    try {
-      sessionStorage.removeItem(this.storageKey);
-      localStorage.removeItem(this.storageKey);
-    } catch {}
     this.cartItems.set([]);
     this.cartCount.set(0);
-  }
-
-  private loadLocalCart(): EnrichedCartItem[] {
-    try {
-      let raw = sessionStorage.getItem(this.storageKey);
-      if (!raw) {
-        raw = localStorage.getItem(this.storageKey);
-        if (raw) {
-          sessionStorage.setItem(this.storageKey, raw);
-          localStorage.removeItem(this.storageKey);
-        }
-      }
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  private saveLocalCart(items: EnrichedCartItem[]): void {
-    try {
-      sessionStorage.setItem(this.storageKey, JSON.stringify(items));
-      localStorage.removeItem(this.storageKey);
-    } catch {}
   }
 }

@@ -1,0 +1,861 @@
+@if (isOpen()) {
+  <div [class.modal-backdrop]="!isDashboard()" [class.dashboard-page-wrapper]="isDashboard()" (click)="!isDashboard() && onBackdropClick($event)">
+    <div [class.modal-card]="!isDashboard()" [class.dashboard-card]="isDashboard()">
+      <div class="modal-header">
+        <div>
+          <div class="dashboard-badge-row">
+            <span class="role-seller-badge">Seller Portal</span>
+          </div>
+          <h2 class="modal-title">{{ isDashboard() ? 'Seller Dashboard' : 'Seller Hub' }}</h2>
+          <p class="modal-sub">List your verified property, track buyers & manage your sales history</p>
+        </div>
+        @if (isDashboard()) {
+          <button class="btn-browse-mkt" (click)="switchView.emit()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+            </svg>
+            <span>Browse Marketplace</span>
+          </button>
+        } @else {
+          <button class="btn-close" (click)="close.emit()" title="Close seller hub">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        }
+      </div>
+
+      <!-- Quick Seller KPI Metric Cards -->
+      @if (isDashboard()) {
+        <div class="seller-kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-title">TOTAL LISTINGS</div>
+            <div class="kpi-val">{{ sellerProperties().length }}</div>
+            <div class="kpi-sub">Portfolio size</div>
+          </div>
+          <div class="kpi-card active-kpi">
+            <div class="kpi-title">ACTIVE LISTINGS</div>
+            <div class="kpi-val">{{ activeCount() }}</div>
+            <div class="kpi-sub">Verified & live on market</div>
+          </div>
+          <div class="kpi-card sold-kpi">
+            <div class="kpi-title">PROPERTIES SOLD</div>
+            <div class="kpi-val">{{ soldCount() }}</div>
+            <div class="kpi-sub">Successfully closed deals</div>
+          </div>
+          <div class="kpi-card rev-kpi">
+            <div class="kpi-title">TOTAL SALES VALUE</div>
+            <div class="kpi-val">{{ formatPrice(soldRevenue()) }}</div>
+            <div class="kpi-sub">Gross realized revenue</div>
+          </div>
+        </div>
+      }
+
+      <!-- Tabs: Post Property vs My Listings -->
+      <div class="tab-bar">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'post'"
+          (click)="activeTab.set('post')"
+        >
+          + Post New Property
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'listings'"
+          (click)="switchToListings()"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="tab-icon">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+          </svg>
+          <span>My Listings ({{ sellerProperties().length }})</span>
+        </button>
+      </div>
+
+      <!-- Alert feedback -->
+      @if (errorMessage()) {
+        <div id="sellerPortalTopBanner" class="alert alert-error">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          </svg>
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+      @if (successMessage()) {
+        <div class="alert alert-success">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <span>{{ successMessage() }}</span>
+        </div>
+      }
+
+      <!-- TAB 1: POST PROPERTY -->
+      @if (activeTab() === 'post') {
+        @if (states().length === 0) {
+          <div class="alert alert-warning backend-offline-banner">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <div class="backend-offline-text">
+              <strong>Location Data Offline:</strong> Unable to load States and Cities. Please ensure PropertyService (port 5002) and ApiGateway (port 5000) are running.
+            </div>
+          </div>
+        }
+        <form (ngSubmit)="handleCreateProperty()" class="post-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>Property Name / Headline *</label>
+              <input
+                type="text"
+                class="form-control"
+                [class.is-invalid]="formSubmitted() && !propertyName.trim()"
+                placeholder="e.g. Luxurious 3BHK Apartment in Whitefield"
+                [(ngModel)]="propertyName"
+                name="propertyName"
+                maxlength="50"
+                required
+              />
+              @if (formSubmitted() && !propertyName.trim()) {
+                <div class="field-error-hint">Property headline is required</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>Property Option *</label>
+              <select class="form-control" [(ngModel)]="propertyOption" name="propertyOption">
+                <option value="Sell">For Sale</option>
+                <option value="Rent">For Rent</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Property Type *</label>
+              <select class="form-control" [(ngModel)]="propertyType" name="propertyType">
+                <option value="Apartment">Apartment</option>
+                <option value="Villa">Villa</option>
+                <option value="Plot">Plot</option>
+                <option value="Commercial">Commercial</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>State *</label>
+              <select
+                class="form-control"
+                [class.is-invalid]="formSubmitted() && !selectedStateId"
+                [(ngModel)]="selectedStateId"
+                name="stateId"
+                (ngModelChange)="onStateChange($event)"
+                required
+              >
+                <option [ngValue]="null">Select State</option>
+                @for (s of states(); track s.stateId) {
+                  <option [ngValue]="s.stateId">{{ s.stateName }}</option>
+                }
+              </select>
+              @if (formSubmitted() && !selectedStateId) {
+                <div class="field-error-hint">Please select a state</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>City *</label>
+              <select
+                class="form-control"
+                [class.is-invalid]="formSubmitted() && !selectedCityId"
+                [(ngModel)]="selectedCityId"
+                name="cityId"
+                required
+              >
+                <option [ngValue]="null">Select City</option>
+                @for (c of availableCities; track c.cityId) {
+                  <option [ngValue]="c.cityId">{{ c.cityName }}</option>
+                }
+              </select>
+              @if (formSubmitted() && !selectedCityId) {
+                <div class="field-error-hint">Please select a city</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>Price (₹) *</label>
+              <input
+                type="number"
+                class="form-control"
+                [class.is-invalid]="formSubmitted() && (!priceRange || priceRange <= 0)"
+                placeholder="e.g. 7500000"
+                [(ngModel)]="priceRange"
+                name="priceRange"
+                min="1"
+                required
+              />
+              @if (formSubmitted() && (!priceRange || priceRange <= 0)) {
+                <div class="field-error-hint">Please enter a valid price greater than 0</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>Initial Deposit (₹)</label>
+              <input
+                type="number"
+                class="form-control"
+                placeholder="Optional deposit"
+                [(ngModel)]="initialDeposit"
+                name="initialDeposit"
+                min="0"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label>Landmark * <small class="text-muted">(Max 25 chars)</small></label>
+              <input
+                type="text"
+                class="form-control"
+                [class.is-invalid]="formSubmitted() && !landmark.trim()"
+                placeholder="e.g. Near Metro Station"
+                [(ngModel)]="landmark"
+                name="landmark"
+                maxlength="25"
+                required
+              />
+              @if (formSubmitted() && !landmark.trim()) {
+                <div class="field-error-hint">Landmark is required (max 25 characters)</div>
+              }
+            </div>
+
+            <div class="form-group full-width">
+              <label>Address *</label>
+              <input
+                type="text"
+                class="form-control"
+                [class.is-invalid]="formSubmitted() && !address.trim()"
+                placeholder="Complete street address"
+                [(ngModel)]="address"
+                name="address"
+                maxlength="250"
+                required
+              />
+              @if (formSubmitted() && !address.trim()) {
+                <div class="field-error-hint">Address is required</div>
+              }
+            </div>
+
+            <div class="form-group full-width">
+              <label>Description</label>
+              <textarea
+                class="form-control"
+                rows="2"
+                placeholder="Brief description of features, amenities, and connectivity"
+                [(ngModel)]="description"
+                name="description"
+                maxlength="250"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Accessible File Input (Hidden via .sr-only) -->
+          <input
+            id="sellerPostFileInput"
+            #fileInput
+            type="file"
+            accept="image/*,.jfif,.webp,.bmp"
+            multiple
+            (change)="onFileSelected($event)"
+            class="sr-only"
+          />
+
+          <!-- Image Uploader Section (Max 6 images) -->
+          <div class="image-uploader-section">
+            <div class="uploader-header">
+              <div>
+                <label class="section-title">Upload Photos (Max 6)</label>
+                <span class="sub-hint">
+                  Selected: <strong>{{ imagePreviews().length }} / 6 photos</strong>
+                  @if (imagePreviews().length === 6) {
+                    • <span class="text-warning">Maximum capacity reached</span>
+                  }
+                </span>
+              </div>
+              <div class="uploader-actions">
+                @if (imagePreviews().length < 6) {
+                  <button
+                    type="button"
+                    class="btn-sample-photos"
+                    (click)="addSamplePhotos()"
+                    title="Quickly fill remaining photo slots with high-quality architecture photos"
+                  >
+                    ⚡ Add Sample Photos
+                  </button>
+                  <label
+                    for="sellerPostFileInput"
+                    class="btn-select-file"
+                    role="button"
+                    tabindex="0"
+                    (keydown.enter)="$event.preventDefault(); triggerFileInput(fileInput)"
+                    (keydown.space)="$event.preventDefault(); triggerFileInput(fileInput)"
+                    title="Browse your computer to upload property images"
+                  >
+                    + Browse Files
+                  </label>
+                } @else {
+                  <span class="badge-max-reached">Max 6 Selected</span>
+                }
+              </div>
+            </div>
+
+            <!-- Drag & Drop Dropzone Area -->
+            @if (imagePreviews().length < 6) {
+              <div
+                class="photo-dropzone"
+                [class.photo-dropzone-active]="isDragging()"
+                (dragover)="onDragOver($event)"
+                (dragleave)="onDragLeave($event)"
+                (drop)="onFileDrop($event)"
+                (click)="triggerFileInput(fileInput)"
+              >
+                @if (isProcessingImages()) {
+                  <div class="dropzone-loading">
+                    <span class="spinner-small"></span>
+                    <span>Optimizing and compressing photos...</span>
+                  </div>
+                } @else {
+                  <div class="dropzone-content">
+                    <svg class="dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <div class="dropzone-text">
+                      <strong>Drag & drop property photos here</strong>, or <span class="browse-link">browse your device</span>
+                    </div>
+                    <span class="dropzone-sub">Supports JPG, PNG, WebP • Auto-compressed • Up to 6 photos</span>
+                  </div>
+                }
+              </div>
+
+              <!-- Direct URL Input Bar -->
+              <div class="photo-url-bar">
+                <input
+                  type="url"
+                  class="form-control url-input"
+                  placeholder="Or paste an image URL (https://...) and press Add"
+                  [ngModel]="photoUrlInput()"
+                  (ngModelChange)="photoUrlInput.set($event)"
+                  [ngModelOptions]="{standalone: true}"
+                  (keydown.enter)="$event.preventDefault(); addPhotoByUrl()"
+                />
+                <button
+                  type="button"
+                  class="btn-add-url"
+                  (click)="addPhotoByUrl()"
+                  [disabled]="!photoUrlInput().trim()"
+                >
+                  Add URL
+                </button>
+              </div>
+            }
+
+            @if (imagePreviews().length > 0) {
+              <div class="image-previews-grid">
+                @for (img of imagePreviews(); track $index) {
+                  <div class="preview-item">
+                    <img [src]="img" alt="Preview" />
+                    @if ($index === 0) {
+                      <span class="cover-badge" title="This photo will be displayed as the main cover photo in search listings">Cover Photo</span>
+                    }
+                    <button
+                      type="button"
+                      class="btn-remove-img"
+                      (click)="removeImage($index)"
+                      title="Remove image"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- In-place alert feedback right above the publish action -->
+          @if (errorMessage()) {
+            <div class="alert alert-error">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <span>{{ errorMessage() }}</span>
+            </div>
+          }
+          @if (successMessage()) {
+            <div class="alert alert-success">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              </svg>
+              <span>{{ successMessage() }}</span>
+            </div>
+          }
+
+          <div class="form-actions">
+            @if (formSubmitted() && errorMessage()) {
+              <div class="inline-submit-error">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                <span>{{ errorMessage() }}</span>
+              </div>
+            }
+            <button
+              type="submit"
+              class="btn-submit-property"
+              [disabled]="loading() || isProcessingImages()"
+              (click)="$event.preventDefault(); handleCreateProperty()"
+            >
+              {{ isProcessingImages() ? 'Processing Photos...' : loading() ? 'Submitting Property...' : 'PUBLISH PROPERTY' }}
+            </button>
+          </div>
+        </form>
+      }
+
+      <!-- TAB 2: MY LISTINGS -->
+      @if (activeTab() === 'listings') {
+        <div class="listings-hub">
+          <div class="filter-pills">
+            <button
+              class="pill-btn"
+              [class.active]="listingFilter === 'all'"
+              (click)="fetchSellerProperties('all')"
+            >
+              All
+            </button>
+            <button
+              class="pill-btn"
+              [class.active]="listingFilter === 'verified'"
+              (click)="fetchSellerProperties('verified')"
+            >
+              Verified
+            </button>
+            <button
+              class="pill-btn"
+              [class.active]="listingFilter === 'deactivated'"
+              (click)="fetchSellerProperties('deactivated')"
+            >
+              Deactivated
+            </button>
+            <button
+              class="pill-btn"
+              [class.active]="listingFilter === 'sold'"
+              (click)="fetchSellerProperties('sold')"
+            >
+              Sold Properties
+            </button>
+          </div>
+
+          @if (sellerProperties().length === 0) {
+            <div class="empty-listings">
+              <div class="empty-icon-wrap">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </div>
+              <p>No listings found in this category.</p>
+            </div>
+          } @else {
+            <div class="seller-props-list">
+              @for (prop of sellerProperties(); track prop.propertyId) {
+                <div class="seller-prop-row">
+                  <div
+                    class="seller-prop-thumb"
+                    (click)="openPropertyPreview(prop)"
+                    title="Click to view details and photos"
+                    style="cursor: pointer;"
+                  >
+                    @if (prop.primaryImage) {
+                      <img [src]="prop.primaryImage" [alt]="prop.propertyName" />
+                      @if ((prop.imageCount || 1) > 1) {
+                        <span class="seller-thumb-count">{{ prop.imageCount }}📷</span>
+                      }
+                    } @else {
+                      <div class="seller-thumb-placeholder">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="#94a3b8">
+                          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                        </svg>
+                      </div>
+                    }
+                  </div>
+                  <div class="prop-info">
+                    <div class="prop-headline">
+                      <strong class="prop-name">{{ prop.propertyName }}</strong>
+                      <span
+                        class="status-tag"
+                        [class.active]="prop.isActive"
+                        [class.sold]="!prop.isActive && prop.deactivationReason?.startsWith('Sold')"
+                        [class.deactivated]="!prop.isActive && !prop.deactivationReason?.startsWith('Sold')"
+                      >
+                        @if (!prop.isActive && prop.deactivationReason?.startsWith('Sold')) {
+                          <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                          </svg>
+                          <span>Sold</span>
+                        } @else if (prop.isActive) {
+                          <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                          </svg>
+                          <span>Verified / Active</span>
+                        } @else {
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                          </svg>
+                          <span>Deactivated</span>
+                        }
+                      </span>
+                    </div>
+                    <div class="prop-subline">
+                      <span>{{ prop.propertyType }}</span> •
+                      <span>{{ prop.propertyOption === 'Rent' ? 'Rent' : 'Sell' }}</span> •
+                      <span class="landmark-wrap">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                        {{ prop.landmark }}
+                      </span> •
+                      <strong class="prop-price">₹{{ prop.priceRange | number:'1.0-0' }}</strong>
+                    </div>
+                    @if (!prop.isActive && prop.deactivationReason?.startsWith('Sold')) {
+                      <div class="sold-box">
+                        <strong>Deal Status:</strong> {{ prop.deactivationReason }}
+                      </div>
+                    } @else if (!prop.isActive && prop.deactivationReason) {
+                      <div class="deactivation-box">
+                        <strong>Reason for deactivation:</strong> {{ prop.deactivationReason }}
+                      </div>
+                    }
+                  </div>
+
+                  <!-- View & Edit Action Buttons -->
+                  <div class="prop-actions">
+                    <button
+                      type="button"
+                      class="btn-view-prop"
+                      (click)="openPropertyPreview(prop)"
+                      title="View full property details & photo gallery"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                      <span>View Details</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-edit-prop"
+                      (click)="openEditProperty(prop)"
+                      title="Edit listing details and photos"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                      <span>Edit Listing</span>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- EDIT PROPERTY MODAL (STRICT MAX 6 PHOTOS) -->
+  @if (isEditModalOpen()) {
+    <div class="modal-backdrop sub-modal-backdrop" (click)="closeEditProperty()">
+      <div class="modal-card edit-modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="header-text">
+            <h2 class="modal-title">Edit Property Listing</h2>
+            <p class="modal-subtitle">Update details and manage photos (Max 6 photos)</p>
+          </div>
+          <button class="btn-close" (click)="closeEditProperty()" title="Close edit dialog">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        @if (editErrorMessage()) {
+          <div class="alert alert-error">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <span>{{ editErrorMessage() }}</span>
+          </div>
+        }
+        @if (editSuccessMessage()) {
+          <div class="alert alert-success">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            <span>{{ editSuccessMessage() }}</span>
+          </div>
+        }
+
+        <form (ngSubmit)="handleUpdateProperty()" class="post-form edit-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>Property Name / Headline *</label>
+              <input
+                type="text"
+                class="form-control"
+                [class.is-invalid]="editFormSubmitted() && !editPropertyName.trim()"
+                placeholder="e.g. Luxurious 3BHK Apartment in Whitefield"
+                [(ngModel)]="editPropertyName"
+                name="editPropertyName"
+                required
+              />
+              @if (editFormSubmitted() && !editPropertyName.trim()) {
+                <div class="field-error-hint">Property headline is required</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>Property Option *</label>
+              <select class="form-control" [(ngModel)]="editPropertyOption" name="editPropertyOption">
+                <option value="Sell">For Sale</option>
+                <option value="Rent">For Rent</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Property Type *</label>
+              <select class="form-control" [(ngModel)]="editPropertyType" name="editPropertyType">
+                <option value="Apartment">Apartment</option>
+                <option value="Villa">Villa</option>
+                <option value="Plot">Plot</option>
+                <option value="Commercial">Commercial</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>State *</label>
+              <select
+                class="form-control"
+                [class.is-invalid]="editFormSubmitted() && !editSelectedStateId"
+                [(ngModel)]="editSelectedStateId"
+                name="editStateId"
+                (ngModelChange)="onEditStateChange($event)"
+                required
+              >
+                <option [ngValue]="null">Select State</option>
+                @for (s of states(); track s.stateId) {
+                  <option [ngValue]="s.stateId">{{ s.stateName }}</option>
+                }
+              </select>
+              @if (editFormSubmitted() && !editSelectedStateId) {
+                <div class="field-error-hint">Please select a state</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>City *</label>
+              <select
+                class="form-control"
+                [class.is-invalid]="editFormSubmitted() && !editSelectedCityId"
+                [(ngModel)]="editSelectedCityId"
+                name="editCityId"
+                required
+              >
+                <option [ngValue]="null">Select City</option>
+                @for (c of editAvailableCities; track c.cityId) {
+                  <option [ngValue]="c.cityId">{{ c.cityName }}</option>
+                }
+              </select>
+              @if (editFormSubmitted() && !editSelectedCityId) {
+                <div class="field-error-hint">Please select a city</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>Price (₹) *</label>
+              <input
+                type="number"
+                class="form-control"
+                [class.is-invalid]="editFormSubmitted() && (!editPriceRange || editPriceRange <= 0)"
+                [(ngModel)]="editPriceRange"
+                name="editPriceRange"
+                min="1"
+                required
+              />
+              @if (editFormSubmitted() && (!editPriceRange || editPriceRange <= 0)) {
+                <div class="field-error-hint">Please enter a valid price greater than 0</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label>Initial Deposit (₹)</label>
+              <input
+                type="number"
+                class="form-control"
+                [(ngModel)]="editInitialDeposit"
+                name="editInitialDeposit"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Landmark *</label>
+              <input
+                type="text"
+                class="form-control"
+                [class.is-invalid]="editFormSubmitted() && !editLandmark.trim()"
+                [(ngModel)]="editLandmark"
+                name="editLandmark"
+                required
+              />
+              @if (editFormSubmitted() && !editLandmark.trim()) {
+                <div class="field-error-hint">Landmark is required</div>
+              }
+            </div>
+
+            <div class="form-group full-width">
+              <label>Address *</label>
+              <input
+                type="text"
+                class="form-control"
+                [class.is-invalid]="editFormSubmitted() && !editAddress.trim()"
+                [(ngModel)]="editAddress"
+                name="editAddress"
+                required
+              />
+              @if (editFormSubmitted() && !editAddress.trim()) {
+                <div class="field-error-hint">Address is required</div>
+              }
+            </div>
+
+            <div class="form-group full-width">
+              <label>Description</label>
+              <textarea
+                class="form-control"
+                rows="3"
+                [(ngModel)]="editDescription"
+                name="editDescription"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Strict Max 6 Photos Section in Edit Modal -->
+          <div class="image-uploader-section edit-photos-section">
+            <div class="uploader-header">
+              <div>
+                <label class="section-title">Property Photos (Max 6)</label>
+                <span class="sub-hint">
+                  Total Photos: <strong>{{ editTotalPhotos() }} / 6</strong>
+                  @if (editRemainingSlots() > 0) {
+                    • <span class="text-success">{{ editRemainingSlots() }} slot(s) available</span>
+                  } @else {
+                    • <span class="text-warning">Max 6 photos reached (delete existing to add new)</span>
+                  }
+                </span>
+              </div>
+              @if (editRemainingSlots() > 0) {
+                <input
+                  id="sellerEditFileInput"
+                  #editFileInput
+                  type="file"
+                  accept="image/*,.jfif,.webp,.bmp"
+                  multiple
+                  (change)="onEditFileSelected($event)"
+                  class="sr-only"
+                />
+                <label
+                  for="sellerEditFileInput"
+                  class="btn-select-file"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="$event.preventDefault(); editFileInput.click()"
+                  (keydown.space)="$event.preventDefault(); editFileInput.click()"
+                  title="Browse your computer to upload property images"
+                >
+                  + Add Photos
+                </label>
+              } @else {
+                <span class="badge-max-reached">Max 6 Photos Reached</span>
+              }
+            </div>
+
+            <!-- Existing Photos Gallery with Delete Button -->
+            @if (editActiveExistingImages().length > 0) {
+              <div class="photos-group-title">Existing Saved Photos:</div>
+              <div class="image-previews-grid">
+                @for (img of editActiveExistingImages(); track img.imageId) {
+                  <div class="preview-item">
+                    <img [src]="img.imageData" alt="Property Photo" />
+                    <span class="photo-badge saved-badge">Saved</span>
+                    <button
+                      type="button"
+                      class="btn-remove-img"
+                      (click)="removeExistingImage(img.imageId)"
+                      title="Delete this photo"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- New Photos Gallery with Cancel Button -->
+            @if (editNewImagePreviews().length > 0) {
+              <div class="photos-group-title" style="margin-top: 12px;">New Photos (will be uploaded on save):</div>
+              <div class="image-previews-grid">
+                @for (img of editNewImagePreviews(); track $index) {
+                  <div class="preview-item new-photo-item">
+                    <img [src]="img" alt="New Photo Preview" />
+                    <span class="photo-badge new-badge">New</span>
+                    <button
+                      type="button"
+                      class="btn-remove-img"
+                      (click)="removeNewImage($index)"
+                      title="Cancel this new photo"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-actions edit-modal-actions">
+            <button
+              type="button"
+              class="btn-cancel-edit"
+              (click)="closeEditProperty()"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-submit-property"
+              [disabled]="editLoading()"
+            >
+              {{ editLoading() ? 'Saving Changes...' : 'SAVE CHANGES' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+}

@@ -1,856 +1,17 @@
 import { Component, input, output, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import { PropertyService } from '../../services/property.service';
-import { State, City, Property } from '../../models/models';
+import { State, City, Property, PropertyImage } from '../../models/models';
+import { extractErrorMessage } from '../../utils/error.utils';
 
 @Component({
   selector: 'app-seller-portal',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  template: `
-    @if (isOpen()) {
-      <div [class.modal-backdrop]="!isDashboard()" [class.dashboard-page-wrapper]="isDashboard()" (click)="!isDashboard() && onBackdropClick($event)">
-        <div [class.modal-card]="!isDashboard()" [class.dashboard-card]="isDashboard()">
-          <div class="modal-header">
-            <div>
-              <div class="dashboard-badge-row">
-                <span class="role-seller-badge">Seller Portal</span>
-              </div>
-              <h2 class="modal-title">{{ isDashboard() ? 'Seller Dashboard' : 'Seller Hub' }}</h2>
-              <p class="modal-sub">List your verified property, track buyers & manage your sales history</p>
-            </div>
-            @if (isDashboard()) {
-              <button class="btn-browse-mkt" (click)="switchView.emit()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-                </svg>
-                <span>Browse Marketplace</span>
-              </button>
-            } @else {
-              <button class="btn-close" (click)="close.emit()" title="Close seller hub">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            }
-          </div>
-
-          <!-- Quick Seller KPI Metric Cards -->
-          @if (isDashboard()) {
-            <div class="seller-kpi-grid">
-              <div class="kpi-card">
-                <div class="kpi-title">TOTAL LISTINGS</div>
-                <div class="kpi-val">{{ sellerProperties().length }}</div>
-                <div class="kpi-sub">Portfolio size</div>
-              </div>
-              <div class="kpi-card active-kpi">
-                <div class="kpi-title">ACTIVE LISTINGS</div>
-                <div class="kpi-val">{{ activeCount() }}</div>
-                <div class="kpi-sub">Verified & live on market</div>
-              </div>
-              <div class="kpi-card sold-kpi">
-                <div class="kpi-title">PROPERTIES SOLD</div>
-                <div class="kpi-val">{{ soldCount() }}</div>
-                <div class="kpi-sub">Successfully closed deals</div>
-              </div>
-              <div class="kpi-card rev-kpi">
-                <div class="kpi-title">TOTAL SALES VALUE</div>
-                <div class="kpi-val">{{ formatPrice(soldRevenue()) }}</div>
-                <div class="kpi-sub">Gross realized revenue</div>
-              </div>
-            </div>
-          }
-
-          <!-- Tabs: Post Property vs My Listings -->
-          <div class="tab-bar">
-            <button
-              class="tab-btn"
-              [class.active]="activeTab() === 'post'"
-              (click)="activeTab.set('post')"
-            >
-              + Post New Property
-            </button>
-            <button
-              class="tab-btn"
-              [class.active]="activeTab() === 'listings'"
-              (click)="switchToListings()"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="tab-icon">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-              </svg>
-              <span>My Listings ({{ sellerProperties().length }})</span>
-            </button>
-          </div>
-
-          <!-- Alert feedback -->
-          @if (errorMessage()) {
-            <div class="alert alert-error">
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-              </svg>
-              <span>{{ errorMessage() }}</span>
-            </div>
-          }
-          @if (successMessage()) {
-            <div class="alert alert-success">
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-              </svg>
-              <span>{{ successMessage() }}</span>
-            </div>
-          }
-
-          <!-- TAB 1: POST PROPERTY -->
-          @if (activeTab() === 'post') {
-            <form (ngSubmit)="handleCreateProperty()" class="post-form" novalidate>
-              <div class="form-grid">
-                <div class="form-group full-width">
-                  <label>Property Name / Headline *</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    placeholder="e.g. Luxurious 3BHK Apartment in Whitefield"
-                    [(ngModel)]="propertyName"
-                    name="propertyName"
-                    required
-                  />
-                </div>
-
-                <div class="form-group">
-                  <label>Property Option *</label>
-                  <select class="form-control" [(ngModel)]="propertyOption" name="propertyOption">
-                    <option value="Sell">For Sale</option>
-                    <option value="Rent">For Rent</option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label>Property Type *</label>
-                  <select class="form-control" [(ngModel)]="propertyType" name="propertyType">
-                    <option value="Apartment">Apartment</option>
-                    <option value="Villa">Villa</option>
-                    <option value="Plot">Plot</option>
-                    <option value="Commercial">Commercial</option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label>State *</label>
-                  <select
-                    class="form-control"
-                    [(ngModel)]="selectedStateId"
-                    name="stateId"
-                    (change)="onStateChange()"
-                  >
-                    <option [ngValue]="null">Select State</option>
-                    @for (s of states(); track s.stateId) {
-                      <option [ngValue]="s.stateId">{{ s.stateName }}</option>
-                    }
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label>City *</label>
-                  <select class="form-control" [(ngModel)]="selectedCityId" name="cityId">
-                    <option [ngValue]="null">Select City</option>
-                    @for (c of availableCities; track c.cityId) {
-                      <option [ngValue]="c.cityId">{{ c.cityName }}</option>
-                    }
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label>Price (₹) *</label>
-                  <input
-                    type="number"
-                    class="form-control"
-                    placeholder="e.g. 7500000"
-                    [(ngModel)]="priceRange"
-                    name="priceRange"
-                    min="1"
-                    required
-                  />
-                </div>
-
-                <div class="form-group">
-                  <label>Initial Deposit (₹)</label>
-                  <input
-                    type="number"
-                    class="form-control"
-                    placeholder="Optional deposit"
-                    [(ngModel)]="initialDeposit"
-                    name="initialDeposit"
-                    min="0"
-                  />
-                </div>
-
-                <div class="form-group full-width">
-                  <label>Landmark *</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    placeholder="e.g. Near Metro Station / Tech Park"
-                    [(ngModel)]="landmark"
-                    name="landmark"
-                    required
-                  />
-                </div>
-
-                <div class="form-group full-width">
-                  <label>Address *</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    placeholder="Complete street address"
-                    [(ngModel)]="address"
-                    name="address"
-                    required
-                  />
-                </div>
-
-                <div class="form-group full-width">
-                  <label>Description</label>
-                  <textarea
-                    class="form-control"
-                    rows="2"
-                    placeholder="Brief description of features, amenities, and connectivity"
-                    [(ngModel)]="description"
-                    name="description"
-                  ></textarea>
-                </div>
-              </div>
-
-              <!-- Image Uploader Section (Max 6 images) -->
-              <div class="image-uploader-section">
-                <div class="uploader-header">
-                  <div>
-                    <label class="section-title">Upload Images</label>
-                    <span class="sub-hint">Upload up to 6 photos ({{ imagePreviews().length }}/6 selected)</span>
-                  </div>
-                  @if (imagePreviews().length < 6) {
-                    <input
-                      #fileInput
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      (change)="onFileSelected($event)"
-                      style="display:none;"
-                    />
-                    <button
-                      type="button"
-                      class="btn-select-file"
-                      (click)="fileInput.click()"
-                    >
-                      + Add Photos
-                    </button>
-                  }
-                </div>
-
-                @if (imagePreviews().length > 0) {
-                  <div class="image-previews-grid">
-                    @for (img of imagePreviews(); track $index) {
-                      <div class="preview-item">
-                        <img [src]="img" alt="Preview" />
-                        <button
-                          type="button"
-                          class="btn-remove-img"
-                          (click)="removeImage($index)"
-                          title="Remove image"
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </button>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-
-              <!-- In-place alert feedback right above the publish action -->
-              @if (errorMessage()) {
-                <div class="alert alert-error">
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                  </svg>
-                  <span>{{ errorMessage() }}</span>
-                </div>
-              }
-              @if (successMessage()) {
-                <div class="alert alert-success">
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                  </svg>
-                  <span>{{ successMessage() }}</span>
-                </div>
-              }
-
-              <div class="form-actions">
-                <button
-                  type="button"
-                  class="btn-submit-property"
-                  (click)="handleCreateProperty()"
-                  [disabled]="loading()"
-                >
-                  {{ loading() ? 'Submitting Property...' : 'PUBLISH PROPERTY' }}
-                </button>
-              </div>
-            </form>
-          }
-
-          <!-- TAB 2: MY LISTINGS -->
-          @if (activeTab() === 'listings') {
-            <div class="listings-hub">
-              <div class="filter-pills">
-                <button
-                  class="pill-btn"
-                  [class.active]="listingFilter === 'all'"
-                  (click)="fetchSellerProperties('all')"
-                >
-                  All
-                </button>
-                <button
-                  class="pill-btn"
-                  [class.active]="listingFilter === 'verified'"
-                  (click)="fetchSellerProperties('verified')"
-                >
-                  Verified
-                </button>
-                <button
-                  class="pill-btn"
-                  [class.active]="listingFilter === 'deactivated'"
-                  (click)="fetchSellerProperties('deactivated')"
-                >
-                  Deactivated
-                </button>
-                <button
-                  class="pill-btn"
-                  [class.active]="listingFilter === 'sold'"
-                  (click)="fetchSellerProperties('sold')"
-                >
-                  Sold Properties
-                </button>
-              </div>
-
-              @if (sellerProperties().length === 0) {
-                <div class="empty-listings">
-                  <div class="empty-icon-wrap">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                  </div>
-                  <p>No listings found in this category.</p>
-                </div>
-              } @else {
-                <div class="seller-props-list">
-                  @for (prop of sellerProperties(); track prop.propertyId) {
-                    <div class="seller-prop-row">
-                      <div class="prop-info">
-                        <div class="prop-headline">
-                          <strong class="prop-name">{{ prop.propertyName }}</strong>
-                          <span
-                            class="status-tag"
-                            [class.active]="prop.isActive"
-                            [class.sold]="!prop.isActive && prop.deactivationReason?.startsWith('Sold')"
-                            [class.deactivated]="!prop.isActive && !prop.deactivationReason?.startsWith('Sold')"
-                          >
-                            @if (!prop.isActive && prop.deactivationReason?.startsWith('Sold')) {
-                              <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                              </svg>
-                              <span>Sold</span>
-                            } @else if (prop.isActive) {
-                              <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                              </svg>
-                              <span>Verified / Active</span>
-                            } @else {
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                              <span>Deactivated</span>
-                            }
-                          </span>
-                        </div>
-                        <div class="prop-subline">
-                          <span>{{ prop.propertyType }}</span> •
-                          <span>{{ prop.propertyOption === 'Rent' ? 'Rent' : 'Sell' }}</span> •
-                          <span class="landmark-wrap">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                            </svg>
-                            {{ prop.landmark }}
-                          </span> •
-                          <strong class="prop-price">₹{{ prop.priceRange | number:'1.0-0' }}</strong>
-                        </div>
-                        @if (!prop.isActive && prop.deactivationReason?.startsWith('Sold')) {
-                          <div class="sold-box">
-                            <strong>Deal Status:</strong> {{ prop.deactivationReason }}
-                          </div>
-                        } @else if (!prop.isActive && prop.deactivationReason) {
-                          <div class="deactivation-box">
-                            <strong>Reason for deactivation:</strong> {{ prop.deactivationReason }}
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          }
-        </div>
-      </div>
-    }
-  `,
-  styles: [`
-    .modal-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(5, 32, 60, 0.7);
-      backdrop-filter: blur(4px);
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .dashboard-page-wrapper {
-      padding: 24px 20px 48px 20px;
-      max-width: 1100px;
-      margin: 0 auto;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .modal-card {
-      background: #ffffff;
-      width: 100%;
-      max-width: 780px;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-      padding: 24px;
-      max-height: 90vh;
-      overflow-y: auto;
-      animation: modalFadeIn 0.2s ease-out;
-    }
-    .dashboard-card {
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-      border: 1px solid #e2e8f0;
-      padding: 28px;
-    }
-    .dashboard-badge-row {
-      margin-bottom: 4px;
-    }
-    .role-seller-badge {
-      background: #fef3c7;
-      color: #b45309;
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-    .btn-browse-mkt {
-      background: #f1f5f9;
-      border: 1px solid #cbd5e1;
-      color: #334155;
-      padding: 7px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-    }
-    .btn-browse-mkt:hover {
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-    .seller-kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    @media (max-width: 768px) {
-      .seller-kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    .kpi-card {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 12px 16px;
-    }
-    .kpi-card.active-kpi {
-      border-left: 4px solid #008cff;
-    }
-    .kpi-card.sold-kpi {
-      border-left: 4px solid #10b981;
-    }
-    .kpi-card.rev-kpi {
-      border-left: 4px solid #8b5cf6;
-    }
-    .kpi-title {
-      font-size: 10px;
-      font-weight: 800;
-      color: #64748b;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
-    }
-    .kpi-val {
-      font-size: 18px;
-      font-weight: 800;
-      color: #0f172a;
-    }
-    .kpi-sub {
-      font-size: 11px;
-      color: #94a3b8;
-      margin-top: 2px;
-    }
-    @keyframes modalFadeIn {
-      from { transform: scale(0.95); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 16px;
-    }
-    .modal-title {
-      font-size: 20px;
-      font-weight: 800;
-      color: #0f172a;
-      margin: 0 0 2px 0;
-    }
-    .modal-sub {
-      font-size: 13px;
-      color: #64748b;
-      margin: 0;
-    }
-    .btn-close {
-      background: none;
-      border: none;
-      color: #94a3b8;
-      cursor: pointer;
-      padding: 6px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background-color 0.15s, color 0.15s;
-    }
-    .btn-close:hover {
-      background: #f1f5f9;
-      color: #0f172a;
-    }
-    .tab-bar {
-      display: flex;
-      gap: 10px;
-      border-bottom: 2px solid #e2e8f0;
-      margin-bottom: 18px;
-    }
-    .tab-btn {
-      background: none;
-      border: none;
-      padding: 10px 16px;
-      font-size: 13px;
-      font-weight: 700;
-      color: #64748b;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      transition: all 0.15s;
-    }
-    .tab-btn.active {
-      color: #008cff;
-      border-bottom-color: #008cff;
-    }
-    .post-form {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    @media (max-width: 600px) {
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    .full-width {
-      grid-column: 1 / -1;
-    }
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .form-group label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #475569;
-    }
-    .form-control {
-      padding: 9px 12px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 13px;
-      color: #0f172a;
-      outline: none;
-      background: #ffffff;
-    }
-    .form-control:focus {
-      border-color: #008cff;
-    }
-    .image-uploader-section {
-      background: #f8fafc;
-      border: 1px dashed #cbd5e1;
-      border-radius: 10px;
-      padding: 14px;
-    }
-    .uploader-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .section-title {
-      font-size: 12px;
-      font-weight: 800;
-      color: #334155;
-      display: block;
-    }
-    .sub-hint {
-      font-size: 11px;
-      color: #64748b;
-    }
-    .btn-select-file {
-      background: #e6f3ff;
-      color: #008cff;
-      border: 1px solid #bae0ff;
-      outline: none;
-      font-family: inherit;
-      padding: 6px 14px;
-      font-size: 12px;
-      font-weight: 700;
-      border-radius: 6px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-    }
-    .btn-select-file:hover {
-      background: #d4ebff;
-    }
-    .image-previews-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 10px;
-      margin-top: 10px;
-    }
-    @media (max-width: 600px) {
-      .image-previews-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-    .preview-item {
-      position: relative;
-      aspect-ratio: 1;
-      border-radius: 6px;
-      overflow: hidden;
-      border: 1px solid #cbd5e1;
-    }
-    .preview-item img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .btn-remove-img {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      background: rgba(0, 0, 0, 0.7);
-      color: #ffffff;
-      border: none;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      font-size: 10px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .form-actions {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 8px;
-    }
-    .btn-submit-property {
-      background: linear-gradient(90deg, #008cff 0%, #0056b3 100%);
-      color: #ffffff;
-      border: none;
-      padding: 12px 28px;
-      font-size: 14px;
-      font-weight: 800;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    .btn-submit-property:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .listings-hub {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .filter-pills {
-      display: flex;
-      gap: 8px;
-    }
-    .pill-btn {
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
-      padding: 6px 14px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #475569;
-      border-radius: 14px;
-      cursor: pointer;
-    }
-    .pill-btn.active {
-      background: #008cff;
-      color: #ffffff;
-      border-color: #008cff;
-    }
-    .seller-props-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .seller-prop-row {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 12px;
-      background: #f8fafc;
-    }
-    .prop-headline {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-    .prop-name {
-      font-size: 14px;
-      color: #0f172a;
-    }
-    .status-tag {
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 4px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .status-tag.active {
-      background: #ecfdf5;
-      color: #059669;
-      border: 1px solid #a7f3d0;
-    }
-    .status-tag.sold {
-      background: #ecfdf5;
-      color: #065f46;
-      border: 1px solid #10b981;
-      font-weight: 700;
-    }
-    .status-tag.deactivated {
-      background: #fef2f2;
-      color: #dc2626;
-      border: 1px solid #fecaca;
-    }
-    .prop-subline {
-      font-size: 12px;
-      color: #64748b;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .landmark-wrap {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: #475569;
-    }
-    .prop-price {
-      color: #05203c;
-    }
-    .deactivation-box {
-      margin-top: 8px;
-      padding: 6px 10px;
-      background: #fee2e2;
-      border-radius: 6px;
-      font-size: 11px;
-      color: #991b1b;
-    }
-    .sold-box {
-      margin-top: 8px;
-      padding: 6px 10px;
-      background: #ecfdf5;
-      border: 1px solid #a7f3d0;
-      border-radius: 6px;
-      font-size: 11px;
-      color: #065f46;
-    }
-    .empty-listings {
-      text-align: center;
-      padding: 40px;
-      color: #64748b;
-    }
-    .empty-icon-wrap {
-      margin-bottom: 10px;
-    }
-    .alert {
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .alert-error {
-      background: #fef2f2;
-      color: #dc2626;
-      border: 1px solid #fecaca;
-    }
-    .alert-success {
-      background: #f0fdf4;
-      color: #16a34a;
-      border: 1px solid #bbf7d0;
-    }
-  `]
+  templateUrl: './seller-portal.component.html',
+  styleUrl: './seller-portal.component.css'
 })
 export class SellerPortalComponent {
   readonly isOpen = input<boolean>(true);
@@ -863,6 +24,11 @@ export class SellerPortalComponent {
   readonly close = output<void>();
   readonly propertyCreated = output<void>();
   readonly switchView = output<void>();
+  readonly viewProperty = output<Property>();
+
+  openPropertyPreview(prop: Property): void {
+    this.viewProperty.emit(prop);
+  }
 
   readonly activeTab = signal<'post' | 'listings'>('listings');
   listingFilter: 'all' | 'verified' | 'deactivated' | 'sold' = 'all';
@@ -890,6 +56,9 @@ export class SellerPortalComponent {
     return `₹${price.toLocaleString('en-IN')}`;
   }
 
+  formSubmitted = signal<boolean>(false);
+  editFormSubmitted = signal<boolean>(false);
+
   // Post form fields
   propertyName = '';
   propertyOption = 'Sell';
@@ -902,8 +71,47 @@ export class SellerPortalComponent {
   address = '';
   description = '';
   readonly imagePreviews = signal<string[]>([]);
+  readonly photoUrlInput = signal<string>('');
+  readonly isDragging = signal<boolean>(false);
+  readonly isProcessingImages = signal<boolean>(false);
 
   availableCities: City[] = [];
+
+  // Edit Listing state
+  readonly editingProperty = signal<Property | null>(null);
+  readonly isEditModalOpen = computed(() => this.editingProperty() !== null);
+
+  editPropertyName = '';
+  editPropertyOption = 'Sell';
+  editPropertyType = 'Apartment';
+  editSelectedStateId: number | null = null;
+  editSelectedCityId: number | null = null;
+  editPriceRange: number = 0;
+  editInitialDeposit: number = 0;
+  editLandmark = '';
+  editAddress = '';
+  editDescription = '';
+  editAvailableCities: City[] = [];
+
+  readonly editExistingImages = signal<PropertyImage[]>([]);
+  readonly editDeletedImageIds = signal<number[]>([]);
+  readonly editNewImagePreviews = signal<string[]>([]);
+
+  readonly editActiveExistingImages = computed(() =>
+    this.editExistingImages().filter(img => !this.editDeletedImageIds().includes(img.imageId))
+  );
+
+  readonly editTotalPhotos = computed(() =>
+    this.editActiveExistingImages().length + this.editNewImagePreviews().length
+  );
+
+  readonly editRemainingSlots = computed(() =>
+    Math.max(0, 6 - this.editTotalPhotos())
+  );
+
+  editLoading = signal<boolean>(false);
+  editErrorMessage = signal<string | null>(null);
+  editSuccessMessage = signal<string | null>(null);
 
   constructor(private propertyService: PropertyService) {
     effect(() => {
@@ -930,12 +138,14 @@ export class SellerPortalComponent {
     }
   }
 
-  onStateChange(): void {
-    if (!this.selectedStateId) {
+  onStateChange(stateId?: number | null): void {
+    const sId = (stateId !== undefined && stateId !== null) ? Number(stateId) : (this.selectedStateId ? Number(this.selectedStateId) : null);
+    this.selectedStateId = sId;
+    if (!sId) {
       this.availableCities = [];
       this.selectedCityId = null;
     } else {
-      this.availableCities = this.cities().filter(c => c.stateId === Number(this.selectedStateId));
+      this.availableCities = this.cities().filter(c => c.stateId === sId);
       if (!this.availableCities.some(c => c.cityId === Number(this.selectedCityId))) {
         this.selectedCityId = null;
       }
@@ -971,52 +181,257 @@ export class SellerPortalComponent {
     });
   }
 
+  /**
+   * Safely triggers native file picker activation from UI buttons or dropzone.
+   */
+  triggerFileInput(inputElement?: HTMLInputElement): void {
+    if (inputElement) {
+      try {
+        inputElement.click();
+        return;
+      } catch (err) {
+        console.warn('[SellerPortal] Could not trigger file input click:', err);
+      }
+    }
+    const fallback = document.getElementById('sellerPostFileInput') as HTMLInputElement;
+    if (fallback) {
+      try {
+        fallback.click();
+      } catch (err) {
+        console.warn('[SellerPortal] Fallback file input click failed:', err);
+      }
+    }
+  }
+
+  /**
+   * Compresses an image file using an HTML5 canvas down to a max bounding box
+   * and JPEG quality, drastically reducing base64 payload size from ~5-15MB to ~100-250KB.
+   * Includes a 5-second timeout safeguard to prevent hanging on unsupported or corrupted files.
+   */
+  private compressImage(file: File, maxWidth = 1280, maxHeight = 1280, quality = 0.82): Promise<string> {
+    return new Promise<string>((resolve) => {
+      let isResolved = false;
+      const safeResolve = (val: string) => {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timer);
+          resolve(val);
+        }
+      };
+
+      // 5-second fallback: resolve with raw DataURL if canvas or image load hangs
+      const timer = setTimeout(() => {
+        try {
+          const fallbackReader = new FileReader();
+          fallbackReader.onload = e => safeResolve((e.target?.result as string) || '');
+          fallbackReader.onerror = () => safeResolve('');
+          fallbackReader.readAsDataURL(file);
+        } catch {
+          safeResolve('');
+        }
+      }, 5000);
+
+      const isRecognizedImage = !file.type || file.type.toLowerCase().startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg|jfif)$/i.test(file.name);
+      if (!isRecognizedImage) {
+        safeResolve('');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        if (!dataUrl) {
+          safeResolve('');
+          return;
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            safeResolve(dataUrl);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          safeResolve(compressed);
+        };
+
+        img.onerror = () => safeResolve(dataUrl);
+        img.src = dataUrl;
+      };
+
+      reader.onerror = () => safeResolve('');
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async processFiles(fileList: FileList | File[]): Promise<void> {
+    const rawFiles = Array.from(fileList);
+    if (!rawFiles || rawFiles.length === 0) return;
+
+    const currentPreviews = this.imagePreviews();
+    const remainingSlots = 6 - currentPreviews.length;
+    if (remainingSlots <= 0) {
+      this.errorMessage.set('Maximum 6 photos allowed. Remove a photo to add a new one.');
+      return;
+    }
+
+    if (rawFiles.length > remainingSlots) {
+      this.errorMessage.set(`Only ${remainingSlots} more photo(s) could be added (maximum 6 photos allowed).`);
+    }
+
+    this.isProcessingImages.set(true);
+    const filesToProcess = rawFiles.slice(0, remainingSlots);
+
+    try {
+      const compressionPromises = filesToProcess.map(file => this.compressImage(file));
+      const compressedImages = await Promise.all(compressionPromises);
+      const valid = compressedImages.filter(img => Boolean(img && img.length > 0));
+
+      if (valid.length === 0) {
+        this.errorMessage.set('Please select valid image files (JPG, PNG, WebP, etc.).');
+        return;
+      }
+
+      this.imagePreviews.update(prev => [...prev, ...valid].slice(0, 6));
+      this.errorMessage.set(null);
+    } catch (err) {
+      console.error('[SellerPortal] Error compressing photos:', err);
+      this.errorMessage.set('Could not process some photos. Please try another image.');
+    } finally {
+      this.isProcessingImages.set(false);
+    }
+  }
+
   async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
 
-    const currentPreviews = this.imagePreviews();
-    const remainingSlots = 6 - currentPreviews.length;
-    const filesToRead = Array.from(input.files).slice(0, remainingSlots);
-
-    const readPromises = filesToRead.map(file => {
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target?.result as string);
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-      });
-    });
-
-    const results = await Promise.all(readPromises);
-    const valid = results.filter(r => !!r);
-    this.imagePreviews.update(prev => [...prev, ...valid].slice(0, 6));
+    await this.processFiles(input.files);
     input.value = '';
+  }
+
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging.set(true);
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging.set(false);
+  }
+
+  onFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragging.set(false);
+
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      this.processFiles(event.dataTransfer.files);
+    }
+  }
+
+  addPhotoByUrl(): void {
+    const url = this.photoUrlInput().trim();
+    if (!url) return;
+
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/')) {
+      this.errorMessage.set('Please enter a valid image URL starting with http://, https://, or data:image/');
+      return;
+    }
+
+    if (this.imagePreviews().length >= 6) {
+      this.errorMessage.set('Maximum 6 photos allowed. Remove a photo to add a new one.');
+      return;
+    }
+
+    this.imagePreviews.update(prev => [...prev, url].slice(0, 6));
+    this.photoUrlInput.set('');
+    this.errorMessage.set(null);
+  }
+
+  addSamplePhotos(): void {
+    const samplePhotos = [
+      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&q=80'
+    ];
+
+    const remaining = 6 - this.imagePreviews().length;
+    if (remaining <= 0) {
+      this.errorMessage.set('Maximum 6 photos reached.');
+      return;
+    }
+
+    const toAdd = samplePhotos.slice(0, remaining);
+    this.imagePreviews.update(prev => [...prev, ...toAdd]);
+    this.errorMessage.set(null);
   }
 
   removeImage(index: number): void {
     this.imagePreviews.update(prev => prev.filter((_, i) => i !== index));
+    this.errorMessage.set(null);
   }
 
-  handleCreateProperty(): void {
+  async handleCreateProperty(): Promise<void> {
+    this.formSubmitted.set(true);
+
+    if (this.isProcessingImages()) {
+      this.errorMessage.set('Please wait for photo processing to finish before publishing.');
+      this.scrollToFeedback();
+      return;
+    }
+
     if (!this.propertyName || !this.propertyName.trim()) {
       this.errorMessage.set('Property name / headline is required.');
+      this.scrollToFeedback();
+      return;
+    }
+    if (!this.selectedStateId) {
+      this.errorMessage.set('Please select a State.');
+      this.scrollToFeedback();
       return;
     }
     if (!this.selectedCityId) {
       this.errorMessage.set('Please select a City.');
+      this.scrollToFeedback();
       return;
     }
     if (!this.priceRange || this.priceRange <= 0) {
       this.errorMessage.set('Price must be greater than 0.');
-      return;
-    }
-    if (!this.address || !this.address.trim()) {
-      this.errorMessage.set('Address is required.');
+      this.scrollToFeedback();
       return;
     }
     if (!this.landmark || !this.landmark.trim()) {
       this.errorMessage.set('Landmark is required.');
+      this.scrollToFeedback();
+      return;
+    }
+    if (!this.address || !this.address.trim()) {
+      this.errorMessage.set('Address is required.');
+      this.scrollToFeedback();
       return;
     }
 
@@ -1036,43 +451,30 @@ export class SellerPortalComponent {
       initialDeposit: Number(this.initialDeposit || 0),
       description: this.description ? this.description.trim() : '',
       cityId: Number(this.selectedCityId),
-      sellerId: effectiveSellerId
+      sellerId: effectiveSellerId,
+      images: this.imagePreviews()
     };
 
     console.log('[SellerPortal] Submitting property payload:', payload);
 
-    this.propertyService.createProperty(payload).subscribe({
-      next: (res: any) => {
-        console.log('[SellerPortal] Create property response:', res);
-        const property = (res && res.data) ? res.data : (res && res.propertyId ? res : null);
+    try {
+      // 1. Create property core entity
+      const res: any = await firstValueFrom(this.propertyService.createProperty(payload));
+      console.log('[SellerPortal] Create property response:', res);
+      const property = (res && res.data) ? res.data : (res && res.propertyId ? res : null);
+      const newPropertyId = property?.propertyId;
 
-        if (property && property.propertyId) {
-          const newPropertyId = property.propertyId;
-
-          // If images exist, upload them
-          if (this.imagePreviews().length > 0) {
-            this.propertyService.uploadImages(newPropertyId, this.imagePreviews()).subscribe({
-              next: () => {
-                this.completeSuccess();
-              },
-              error: () => {
-                this.completeSuccess();
-              }
-            });
-          } else {
-            this.completeSuccess();
-          }
-        } else {
-          this.loading.set(false);
-          this.errorMessage.set(res?.message || 'Failed to create property.');
-        }
-      },
-      error: err => {
-        console.error('[SellerPortal] Error submitting property:', err);
-        this.loading.set(false);
-        this.errorMessage.set(err.error?.message || err.error || err.message || 'Failed to submit property.');
+      if (!newPropertyId) {
+        throw new Error(res?.message || 'Failed to obtain created property identifier.');
       }
-    });
+
+      // Photos are saved as part of the create request.
+      this.completeSuccess();
+    } catch (err: any) {
+      console.error('[SellerPortal] Error submitting property:', err);
+      this.loading.set(false);
+      this.errorMessage.set(extractErrorMessage(err, 'Failed to submit property.'));
+    }
   }
 
   private completeSuccess(): void {
@@ -1089,15 +491,259 @@ export class SellerPortalComponent {
     }, 1200);
   }
 
+  private scrollToFeedback(): void {
+    // Defer execution slightly to allow Angular signals and @if DOM elements to render
+    setTimeout(() => {
+      try {
+        // 1. Focus and scroll to the first invalid input directly
+        const firstInvalid = document.querySelector<HTMLElement>(
+          '.post-form .is-invalid, .post-form input:invalid, .post-form select:invalid'
+        );
+        if (firstInvalid) {
+          firstInvalid.focus();
+          firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        // 2. Otherwise scroll smoothly to the top banner
+        const banner = document.getElementById('sellerPortalTopBanner') || document.querySelector('.post-form');
+        if (banner) {
+          banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch (e) {
+        console.warn('[SellerPortal] Scroll feedback notice:', e);
+      }
+    }, 60);
+  }
+
   private resetForm(): void {
+    this.formSubmitted.set(false);
     this.propertyName = '';
     this.propertyOption = 'Sell';
     this.propertyType = 'Apartment';
+    this.selectedStateId = null;
+    this.selectedCityId = null;
+    this.availableCities = [];
     this.priceRange = 0;
     this.initialDeposit = 0;
     this.landmark = '';
     this.address = '';
     this.description = '';
     this.imagePreviews.set([]);
+    this.photoUrlInput.set('');
+    this.isDragging.set(false);
+    this.isProcessingImages.set(false);
+  }
+
+  // =========================================================================
+  // EDIT PROPERTY WORKFLOW
+  // =========================================================================
+
+  openEditProperty(prop: Property): void {
+    this.editingProperty.set(prop);
+    this.editErrorMessage.set(null);
+    this.editSuccessMessage.set(null);
+    this.editLoading.set(false);
+
+    this.editPropertyName = prop.propertyName;
+    this.editPropertyOption = prop.propertyOption;
+    this.editPropertyType = prop.propertyType;
+    this.editPriceRange = prop.priceRange;
+    this.editInitialDeposit = prop.initialDeposit || 0;
+    this.editLandmark = prop.landmark;
+    this.editAddress = prop.address;
+    this.editDescription = prop.description || '';
+
+    const allCities = this.cities();
+    const city = allCities.find(c => c.cityId === prop.cityId);
+    if (city) {
+      this.editSelectedStateId = city.stateId;
+      this.editAvailableCities = allCities.filter(c => c.stateId === city.stateId);
+      this.editSelectedCityId = city.cityId;
+    } else {
+      this.editSelectedStateId = null;
+      this.editSelectedCityId = prop.cityId;
+      this.editAvailableCities = allCities;
+    }
+
+    this.editExistingImages.set([]);
+    this.editDeletedImageIds.set([]);
+    this.editNewImagePreviews.set([]);
+
+    // Fetch existing images for this property
+    this.propertyService.getImages(prop.propertyId).subscribe({
+      next: res => {
+        if (res.success && res.data) {
+          this.editExistingImages.set(res.data);
+        }
+      }
+    });
+  }
+
+  closeEditProperty(): void {
+    this.editingProperty.set(null);
+    this.editErrorMessage.set(null);
+    this.editSuccessMessage.set(null);
+    this.editFormSubmitted.set(false);
+    this.editExistingImages.set([]);
+    this.editDeletedImageIds.set([]);
+    this.editNewImagePreviews.set([]);
+  }
+
+  onEditStateChange(stateId?: number | null): void {
+    const sId = (stateId !== undefined && stateId !== null) ? Number(stateId) : (this.editSelectedStateId ? Number(this.editSelectedStateId) : null);
+    this.editSelectedStateId = sId;
+    if (!sId) {
+      this.editAvailableCities = [];
+      this.editSelectedCityId = null;
+    } else {
+      this.editAvailableCities = this.cities().filter(c => c.stateId === sId);
+      if (!this.editAvailableCities.some(c => c.cityId === Number(this.editSelectedCityId))) {
+        this.editSelectedCityId = null;
+      }
+    }
+  }
+
+  removeExistingImage(imageId: number): void {
+    this.editDeletedImageIds.update(ids => [...ids, imageId]);
+    this.editErrorMessage.set(null);
+  }
+
+  async onEditFileSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const remaining = this.editRemainingSlots();
+    if (remaining <= 0) {
+      this.editErrorMessage.set('Maximum 6 photos reached. Remove existing photos to add new ones.');
+      input.value = '';
+      return;
+    }
+
+    if (input.files.length > remaining) {
+      this.editErrorMessage.set(`You can only add up to ${remaining} more photo(s). Maximum 6 total photos allowed.`);
+    }
+
+    const filesToRead = Array.from(input.files).slice(0, remaining);
+    const compressionPromises = filesToRead.map(file => this.compressImage(file));
+    const results = await Promise.all(compressionPromises);
+    const valid = results.filter(r => Boolean(r && r.length > 0));
+    this.editNewImagePreviews.update(prev => [...prev, ...valid].slice(0, remaining));
+    input.value = '';
+  }
+
+  removeNewImage(index: number): void {
+    this.editNewImagePreviews.update(prev => prev.filter((_, i) => i !== index));
+    this.editErrorMessage.set(null);
+  }
+
+  private scrollToEditFeedback(): void {
+    setTimeout(() => {
+      try {
+        const firstInvalid = document.querySelector<HTMLElement>(
+          '.edit-form .is-invalid, .edit-form input:invalid, .edit-form select:invalid'
+        );
+        if (firstInvalid) {
+          firstInvalid.focus();
+          firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        const modal = document.querySelector('.edit-modal-card') || document.querySelector('.edit-modal-body');
+        if (modal) {
+          modal.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch {}
+    }, 60);
+  }
+
+  async handleUpdateProperty(): Promise<void> {
+    const prop = this.editingProperty();
+    if (!prop) return;
+
+    this.editFormSubmitted.set(true);
+
+    if (!this.editPropertyName || !this.editPropertyName.trim()) {
+      this.editErrorMessage.set('Property name / headline is required.');
+      this.scrollToEditFeedback();
+      return;
+    }
+    if (!this.editSelectedStateId) {
+      this.editErrorMessage.set('Please select a State.');
+      this.scrollToEditFeedback();
+      return;
+    }
+    if (!this.editSelectedCityId) {
+      this.editErrorMessage.set('Please select a City.');
+      this.scrollToEditFeedback();
+      return;
+    }
+    if (!this.editPriceRange || this.editPriceRange <= 0) {
+      this.editErrorMessage.set('Price must be greater than 0.');
+      this.scrollToEditFeedback();
+      return;
+    }
+    if (!this.editLandmark || !this.editLandmark.trim()) {
+      this.editErrorMessage.set('Landmark is required.');
+      this.scrollToEditFeedback();
+      return;
+    }
+    if (!this.editAddress || !this.editAddress.trim()) {
+      this.editErrorMessage.set('Address is required.');
+      this.scrollToEditFeedback();
+      return;
+    }
+
+    this.editLoading.set(true);
+    this.editErrorMessage.set(null);
+    this.editSuccessMessage.set(null);
+
+    const payload = {
+      propertyName: this.editPropertyName.trim(),
+      propertyOption: this.editPropertyOption,
+      propertyType: this.editPropertyType,
+      address: this.editAddress.trim(),
+      landmark: this.editLandmark.trim(),
+      priceRange: Number(this.editPriceRange),
+      initialDeposit: Number(this.editInitialDeposit || 0),
+      description: this.editDescription ? this.editDescription.trim() : '',
+      cityId: Number(this.editSelectedCityId),
+      sellerId: prop.sellerId
+    };
+
+    try {
+      // 1. Update property core data
+      await firstValueFrom(this.propertyService.updateProperty(prop.propertyId, payload));
+
+      // 2. Delete marked images
+      const toDelete = this.editDeletedImageIds();
+      for (const imgId of toDelete) {
+        try {
+          await firstValueFrom(this.propertyService.deletePropertyImage(prop.propertyId, imgId));
+        } catch (e) {
+          console.warn('[SellerPortal] Could not delete image', imgId, e);
+        }
+      }
+
+      // 3. Upload new images
+      const toUpload = this.editNewImagePreviews();
+      if (toUpload.length > 0) {
+        await firstValueFrom(this.propertyService.uploadImages(prop.propertyId, toUpload));
+      }
+
+      this.editLoading.set(false);
+      this.editSuccessMessage.set('🎉 Property updated successfully!');
+      this.fetchSellerProperties(this.listingFilter);
+
+      setTimeout(() => {
+        this.closeEditProperty();
+      }, 1000);
+    } catch (err: any) {
+      console.error('[SellerPortal] Error updating property:', err);
+      this.editLoading.set(false);
+      this.editErrorMessage.set(extractErrorMessage(err, 'Failed to update property.'));
+    }
   }
 }

@@ -4,7 +4,7 @@ namespace EasyHousingSolution.CartService.Application.DTOs;
 
 public class AddToCartDto
 {
-    [Required]
+    // Populated from the authenticated JWT token (optional in request body)
     public int BuyerId { get; set; }
 
     [Required]

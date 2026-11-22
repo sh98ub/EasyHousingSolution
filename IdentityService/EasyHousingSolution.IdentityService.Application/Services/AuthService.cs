@@ -86,11 +86,8 @@ public class AuthService : IAuthService
             var response = await _httpClient.PostAsJsonAsync("api/buyers", buyerPayload);
             if (response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
-                if (body != null && body.TryGetValue("buyerId", out var idObj))
-                {
-                    buyerId = Convert.ToInt32(idObj.ToString());
-                }
+                var profile = await response.Content.ReadFromJsonAsync<UserProfileResponseDto>();
+                buyerId = profile?.BuyerId;
             }
         }
         catch (Exception ex)
@@ -140,15 +137,9 @@ public class AuthService : IAuthService
             throw new InvalidOperationException($"A user with email '{dto.EmailId}' already exists.");
         }
 
-        var firstName = !string.IsNullOrWhiteSpace(dto.FirstName)
-            ? dto.FirstName.Trim()
-            : (dto.FullName.Split(' ').FirstOrDefault() ?? "Seller");
-        var lastName = !string.IsNullOrWhiteSpace(dto.LastName)
-            ? dto.LastName.Trim()
-            : (dto.FullName.Contains(' ') ? dto.FullName.Substring(dto.FullName.IndexOf(' ') + 1).Trim() : null);
-        var fullName = string.IsNullOrWhiteSpace(dto.FullName)
-            ? (string.IsNullOrWhiteSpace(lastName) ? firstName : $"{firstName} {lastName}".Trim())
-            : dto.FullName.Trim();
+        var firstName = !string.IsNullOrWhiteSpace(dto.FirstName) ? dto.FirstName.Trim() : "Seller";
+        var lastName = !string.IsNullOrWhiteSpace(dto.LastName) ? dto.LastName.Trim() : null;
+        var fullName = string.IsNullOrWhiteSpace(lastName) ? firstName : $"{firstName} {lastName}".Trim();
 
         var user = new User
         {
@@ -177,16 +168,13 @@ public class AuthService : IAuthService
             var response = await _httpClient.PostAsJsonAsync("api/sellers", sellerPayload);
             if (response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
-                if (body != null && body.TryGetValue("sellerId", out var idObj))
-                {
-                    sellerId = Convert.ToInt32(idObj.ToString());
-                }
+                var profile = await response.Content.ReadFromJsonAsync<UserProfileResponseDto>();
+                sellerId = profile?.SellerId;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to provision buyer profile in UserService for user {UserName}. Continuing with fallback ProfileId", user.UserName);
+            _logger.LogWarning(ex, "Failed to provision seller profile in UserService for user {UserName}. Continuing with fallback ProfileId", user.UserName);
         }
 
         user.ProfileId = sellerId;
@@ -214,13 +202,63 @@ public class AuthService : IAuthService
             throw new ArgumentException("Invalid email or password.");
         }
 
-        var profileId = user.ProfileId;
+        int? profileId = user.ProfileId;
+        string? resolvedFullName = user.FullName;
+
+        // Query UserService to resolve the actual unique ProfileId and FullName for this user
+        if (user.UserType == "Buyer")
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/buyers/by-email/{Uri.EscapeDataString(normalizedEmail)}");
+                if (response.IsSuccessStatusCode)
+                {
+                    var profile = await response.Content.ReadFromJsonAsync<UserProfileResponseDto>();
+                    if (profile != null)
+                    {
+                        if (profile.BuyerId.HasValue && profile.BuyerId > 0) profileId = profile.BuyerId;
+                        if (!string.IsNullOrWhiteSpace(profile.FirstName))
+                        {
+                            resolvedFullName = string.IsNullOrWhiteSpace(profile.LastName) ? profile.FirstName : $"{profile.FirstName} {profile.LastName}".Trim();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve Buyer profile from UserService for {UserName}", user.UserName);
+            }
+        }
+        else if (user.UserType == "Seller")
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/sellers/by-email/{Uri.EscapeDataString(normalizedEmail)}");
+                if (response.IsSuccessStatusCode)
+                {
+                    var profile = await response.Content.ReadFromJsonAsync<UserProfileResponseDto>();
+                    if (profile != null)
+                    {
+                        if (profile.SellerId.HasValue && profile.SellerId > 0) profileId = profile.SellerId;
+                        if (!string.IsNullOrWhiteSpace(profile.FirstName))
+                        {
+                            resolvedFullName = string.IsNullOrWhiteSpace(profile.LastName) ? profile.FirstName : $"{profile.FirstName} {profile.LastName}".Trim();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve Seller profile from UserService for {UserName}", user.UserName);
+            }
+        }
+
+        // Only fallback to 1 for the pre-seeded demo accounts if UserService was unreachable
         if (!profileId.HasValue || profileId.Value <= 0)
         {
-            if (user.UserType == "Seller" || user.UserType == "Buyer")
-            {
-                profileId = 1;
-            }
+            if (normalizedEmail == "buyer@demo.com") profileId = 1;
+            else if (normalizedEmail == "priya.nair@outlook.com") profileId = 2;
+            else if (normalizedEmail == "seller@demo.com") profileId = 1;
         }
 
         var token = _jwtTokenGenerator.GenerateToken(user.UserName, user.UserType, profileId);
@@ -230,38 +268,10 @@ public class AuthService : IAuthService
             Token = token,
             EmailId = user.UserName,
             UserType = user.UserType,
-            FullName = string.IsNullOrWhiteSpace(user.FullName) ? user.UserName : user.FullName,
+            FullName = !string.IsNullOrWhiteSpace(resolvedFullName)
+                ? resolvedFullName
+                : (!string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.UserName),
             ProfileId = profileId
-        };
-    }
-
-    public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
-    {
-        var users = await _userRepository.GetAllUsersAsync();
-        return users.Select(u => new UserDto
-        {
-            UserName = u.UserName,
-            EmailId = u.UserName,
-            UserType = u.UserType,
-            FullName = u.FullName ?? string.Empty,
-            PhoneNo = u.PhoneNo ?? string.Empty,
-            ProfileId = u.ProfileId
-        });
-    }
-
-    public async Task<UserDto?> GetUserByUsernameAsync(string username)
-    {
-        var user = await _userRepository.GetByUserNameAsync(username.Trim().ToLowerInvariant());
-        if (user == null) return null;
-
-        return new UserDto
-        {
-            UserName = user.UserName,
-            EmailId = user.UserName,
-            UserType = user.UserType,
-            FullName = user.FullName ?? string.Empty,
-            PhoneNo = user.PhoneNo ?? string.Empty,
-            ProfileId = user.ProfileId
         };
     }
 }

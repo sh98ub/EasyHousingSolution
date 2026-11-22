@@ -19,11 +19,6 @@ public class UserRepository : IUserRepository
         return await _context.Users.FirstOrDefaultAsync(u => u.UserName == userName);
     }
 
-    public async Task<IEnumerable<User>> GetAllUsersAsync()
-    {
-        return await _context.Users.ToListAsync();
-    }
-
     public async Task AddUserAsync(User user)
     {
         await _context.Users.AddAsync(user);

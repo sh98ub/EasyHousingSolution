@@ -21,22 +21,6 @@ public class CartDbContext : DbContext
             entity.Property(e => e.BuyerId).IsRequired();
             entity.Property(e => e.PropertyId).IsRequired();
             entity.HasIndex(e => new { e.BuyerId, e.PropertyId }).IsUnique();
-
-            // Seed sample bookmarked properties for testing
-            entity.HasData(
-                new CartItem
-                {
-                    CartId = 1,
-                    BuyerId = 1,
-                    PropertyId = 1
-                },
-                new CartItem
-                {
-                    CartId = 2,
-                    BuyerId = 1,
-                    PropertyId = 3
-                }
-            );
         });
     }
 }

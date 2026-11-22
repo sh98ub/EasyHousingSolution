@@ -70,13 +70,18 @@ public class PropertyRepository : IPropertyRepository
         return await query.ToListAsync();
     }
 
-    public async Task<IEnumerable<Property>> SearchPropertiesAsync(int? cityId, string? propertyType, string? propertyOption, string? sortBy)
+    public async Task<IEnumerable<Property>> SearchPropertiesAsync(int? cityId, string? propertyType, string? propertyOption, string? sortBy, int? stateId = null)
     {
         var query = _context.Properties.Where(p => p.IsActive);
 
         if (cityId.HasValue && cityId.Value > 0)
         {
             query = query.Where(p => p.CityId == cityId.Value);
+        }
+        else if (stateId.HasValue && stateId.Value > 0)
+        {
+            var cityIds = await _context.Cities.Where(c => c.StateId == stateId.Value).Select(c => c.CityId).ToListAsync();
+            query = query.Where(p => cityIds.Contains(p.CityId));
         }
 
         if (!string.IsNullOrWhiteSpace(propertyType))
@@ -101,9 +106,10 @@ public class PropertyRepository : IPropertyRepository
 
     public async Task<IEnumerable<Property>> GetPurchasedPropertiesByBuyerIdAsync(int buyerId)
     {
-        string prefix = $"Sold to Buyer #{buyerId}";
+        string soldPrefix = $"Sold to Buyer #{buyerId}";
+        string rentPrefix = $"Rented to Buyer #{buyerId}";
         return await _context.Properties
-            .Where(p => !p.IsActive && p.DeactivationReason != null && p.DeactivationReason.StartsWith(prefix))
+            .Where(p => !p.IsActive && p.DeactivationReason != null && (p.DeactivationReason.StartsWith(soldPrefix) || p.DeactivationReason.StartsWith(rentPrefix)))
             .OrderByDescending(p => p.PropertyId)
             .ToListAsync();
     }
@@ -111,7 +117,7 @@ public class PropertyRepository : IPropertyRepository
     public async Task<IEnumerable<Property>> GetSoldPropertiesBySellerIdAsync(int sellerId)
     {
         return await _context.Properties
-            .Where(p => p.SellerId == sellerId && !p.IsActive && p.DeactivationReason != null && p.DeactivationReason.StartsWith("Sold"))
+            .Where(p => p.SellerId == sellerId && !p.IsActive && p.DeactivationReason != null && (p.DeactivationReason.StartsWith("Sold") || p.DeactivationReason.StartsWith("Rented")))
             .OrderByDescending(p => p.PropertyId)
             .ToListAsync();
     }
@@ -168,11 +174,6 @@ public class CityRepository : ICityRepository
     public async Task<City?> GetByIdAsync(int id) => await _context.Cities.FindAsync(id);
 
     public async Task<IEnumerable<City>> GetAllAsync() => await _context.Cities.ToListAsync();
-
-    public async Task<IEnumerable<City>> GetCitiesByStateIdAsync(int stateId)
-    {
-        return await _context.Cities.Where(c => c.StateId == stateId).ToListAsync();
-    }
 
     public async Task<City> AddAsync(City entity)
     {

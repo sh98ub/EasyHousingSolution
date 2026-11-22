@@ -16,14 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\UserService\EasyHousingSolution.UserService.Application\EasyHousingSolution.UserService.Application.csproj" />
-    <ProjectReference Include="..\..\UserService\EasyHousingSolution.UserService.Domain\EasyHousingSolution.UserService.Domain.csproj" />
     <ProjectReference Include="..\..\PropertyService\EasyHousingSolution.PropertyService.Application\EasyHousingSolution.PropertyService.Application.csproj" />
     <ProjectReference Include="..\..\PropertyService\EasyHousingSolution.PropertyService.Domain\EasyHousingSolution.PropertyService.Domain.csproj" />
-    <ProjectReference Include="..\..\CartService\EasyHousingSolution.CartService.Application\EasyHousingSolution.CartService.Application.csproj" />
-    <ProjectReference Include="..\..\CartService\EasyHousingSolution.CartService.Domain\EasyHousingSolution.CartService.Domain.csproj" />
-    <ProjectReference Include="..\..\IdentityService\EasyHousingSolution.IdentityService.Application\EasyHousingSolution.IdentityService.Application.csproj" />
-    <ProjectReference Include="..\..\IdentityService\EasyHousingSolution.IdentityService.Infrastructure\EasyHousingSolution.IdentityService.Infrastructure.csproj" />
     <ProjectReference Include="..\EasyHousingSolution.Shared\EasyHousingSolution.Shared.csproj" />
   </ItemGroup>
 

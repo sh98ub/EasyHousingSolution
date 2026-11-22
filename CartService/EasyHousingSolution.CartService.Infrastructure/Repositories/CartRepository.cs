@@ -14,11 +14,6 @@ public class CartRepository : ICartRepository
         _context = context;
     }
 
-    public async Task<CartItem?> GetByIdAsync(int cartId)
-    {
-        return await _context.CartItems.FindAsync(cartId);
-    }
-
     public async Task<IEnumerable<CartItem>> GetByBuyerIdAsync(int buyerId)
     {
         return await _context.CartItems.Where(c => c.BuyerId == buyerId).ToListAsync();

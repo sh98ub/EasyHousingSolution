@@ -13,7 +13,8 @@ public class GlobalExceptionMiddleware
     public record ExceptionResponse(
         HttpStatusCode StatusCode,
         string Message,
-        string? Details = null);
+        string? Details = null,
+        bool Success = false);
 
     public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
     {
@@ -39,28 +40,28 @@ public class GlobalExceptionMiddleware
         ExceptionResponse response = exception switch
         {
             ArgumentException argEx => 
-                new ExceptionResponse(HttpStatusCode.BadRequest, "Invalid Argument", argEx.Message),
+                new ExceptionResponse(HttpStatusCode.BadRequest, argEx.Message, "Invalid Argument"),
 
             InvalidOperationException opEx => 
-                new ExceptionResponse(HttpStatusCode.BadRequest, "Operation Not Allowed", opEx.Message),
+                new ExceptionResponse(HttpStatusCode.BadRequest, opEx.Message, "Operation Not Allowed"),
 
             BadHttpRequestException badReqEx => 
-                new ExceptionResponse(HttpStatusCode.BadRequest, "Malformed Request", badReqEx.Message),
+                new ExceptionResponse(HttpStatusCode.BadRequest, badReqEx.Message, "Malformed Request"),
 
             KeyNotFoundException notFoundEx => 
-                new ExceptionResponse(HttpStatusCode.NotFound, "Not Found", notFoundEx.Message),
+                new ExceptionResponse(HttpStatusCode.NotFound, notFoundEx.Message, "Not Found"),
 
-            UnauthorizedAccessException _ => 
-                new ExceptionResponse(HttpStatusCode.Unauthorized, "Unauthorized", "Access denied. Authentication required."),
+            UnauthorizedAccessException unauthEx => 
+                new ExceptionResponse(HttpStatusCode.Unauthorized, string.IsNullOrWhiteSpace(unauthEx.Message) ? "Access denied. Authentication required." : unauthEx.Message, "Unauthorized"),
 
             HttpRequestException _ => 
-                new ExceptionResponse(HttpStatusCode.BadGateway, "Service Communication Error", "Failed to communicate with downstream microservice."),
+                new ExceptionResponse(HttpStatusCode.BadGateway, "Failed to communicate with downstream microservice.", "Service Communication Error"),
 
             DbUpdateException _ => 
-                new ExceptionResponse(HttpStatusCode.Conflict, "Database Conflict", "Record already exists or violates a database unique constraint."),
+                new ExceptionResponse(HttpStatusCode.Conflict, "Record already exists or violates a database unique constraint.", "Database Conflict"),
 
             _ => 
-                new ExceptionResponse(HttpStatusCode.InternalServerError, "Internal Server Error", "An unexpected error occurred. Please try again later.")
+                new ExceptionResponse(HttpStatusCode.InternalServerError, "An unexpected error occurred. Please try again later.", "Internal Server Error")
         };
 
         context.Response.ContentType = "application/json";

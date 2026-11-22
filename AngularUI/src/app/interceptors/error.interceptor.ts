@@ -54,13 +54,18 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           ? error.error 
           : JSON.stringify(error.error || error.message);
 
-        // Only display modal if not a background/offline fallback route
-        errorService.showError({
-          title,
-          message: userMessage,
-          statusCode: error.status,
-          technicalDetails: technical
-        });
+        // Only display global modal for critical system-level failures (Offline status 0, Server errors 5xx, or Forbidden 403).
+        // Form validations and business logic errors (400, 401, 404, 409) are displayed inline by UI components.
+        const isCriticalSystemError = error.status === 0 || error.status >= 500 || error.status === 403;
+
+        if (isCriticalSystemError) {
+          errorService.showError({
+            title,
+            message: userMessage,
+            statusCode: error.status,
+            technicalDetails: technical
+          });
+        }
       } else {
         errorService.showError({
           title: 'Client Runtime Error',

@@ -109,54 +109,6 @@
       "UpstreamHttpMethod": [ "Get", "Post", "Put", "Delete", "Options" ]
     },
     {
-      "DownstreamPathTemplate": "/api/buyers/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 5003
-        }
-      ],
-      "UpstreamPathTemplate": "/api/buyers/{everything}",
-      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Delete", "Options" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/buyers",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 5003
-        }
-      ],
-      "UpstreamPathTemplate": "/api/buyers",
-      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Delete", "Options" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/sellers/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 5003
-        }
-      ],
-      "UpstreamPathTemplate": "/api/sellers/{everything}",
-      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Delete", "Options" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/sellers",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [
-        {
-          "Host": "localhost",
-          "Port": 5003
-        }
-      ],
-      "UpstreamPathTemplate": "/api/sellers",
-      "UpstreamHttpMethod": [ "Get", "Post", "Put", "Delete", "Options" ]
-    },
-    {
       "DownstreamPathTemplate": "/api/cart/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [

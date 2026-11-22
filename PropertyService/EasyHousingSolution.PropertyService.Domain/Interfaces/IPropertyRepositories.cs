@@ -7,7 +7,7 @@ public interface IPropertyRepository : IRepository<Property>
 {
     Task<IEnumerable<Property>> GetVerifiedPropertiesAsync();
     Task<IEnumerable<Property>> GetBySellerIdAsync(int sellerId, bool? isActive = null);
-    Task<IEnumerable<Property>> SearchPropertiesAsync(int? cityId, string? propertyType, string? propertyOption, string? sortBy);
+    Task<IEnumerable<Property>> SearchPropertiesAsync(int? cityId, string? propertyType, string? propertyOption, string? sortBy, int? stateId = null);
     Task<IEnumerable<Property>> GetPurchasedPropertiesByBuyerIdAsync(int buyerId);
     Task<IEnumerable<Property>> GetSoldPropertiesBySellerIdAsync(int sellerId);
 }
@@ -18,7 +18,6 @@ public interface IStateRepository : IRepository<State>
 
 public interface ICityRepository : IRepository<City>
 {
-    Task<IEnumerable<City>> GetCitiesByStateIdAsync(int stateId);
 }
 
 public interface IPropertyImageRepository : IRepository<PropertyImage>

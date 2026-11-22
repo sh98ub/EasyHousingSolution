@@ -1,10 +1,16 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+
+
 using EasyHousingSolution.CartService.Application.DTOs;
 using EasyHousingSolution.CartService.Application.Interfaces;
+using EasyHousingSolution.Shared.Security;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace EasyHousingSolution.CartService.API.Controllers;
 
+/// <summary>
+/// API Controller managing buyer cart and saved property bookmarks.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class CartController : ControllerBase
@@ -16,75 +22,66 @@ public class CartController : ControllerBase
         _cartAppService = cartAppService;
     }
 
-    private int GetTokenProfileId()
-    {
-        var claim = User.FindFirst("profileId")?.Value
-                 ?? User.FindFirst("buyerId")?.Value;
-        return int.TryParse(claim, out var id) ? id : 0;
-    }
+    // Helper property to extract the logged-in buyer's ID from the JWT token
+    private int CurrentBuyerId => User.GetProfileId();
 
     [HttpPost("items")]
     [Authorize(Roles = "Buyer")]
     [Tags("Buyer")]
     public async Task<IActionResult> AddToCart(AddToCartDto dto)
     {
-        if (dto.BuyerId <= 0)
+        // Priority to token's authenticated ID; fallback to DTO if available
+        var buyerId = CurrentBuyerId > 0 ? CurrentBuyerId : dto.BuyerId;
+        if (buyerId <= 0)
         {
-            var buyerId = GetTokenProfileId();
-            if (buyerId <= 0)
-            {
-                return Unauthorized(new { message = "Invalid token or buyer profile not found." });
-            }
-            dto.BuyerId = buyerId;
+            return BadRequest(new { success = false, message = "A valid Buyer profile is required." });
         }
 
-        var result = await _cartAppService.AddToCartAsync(dto);
+        var result = await _cartAppService.AddToCartAsync(buyerId, dto.PropertyId);
         return Ok(result);
     }
 
-    [HttpDelete("items/{propertyId:int}")]
+    [HttpDelete("items/{id:int}")]
     [Authorize(Roles = "Buyer")]
     [Tags("Buyer")]
-    public async Task<IActionResult> RemovePropertyFromCart(int propertyId)
+    public async Task<IActionResult> RemovePropertyFromCart(int id)
     {
-        var buyerId = GetTokenProfileId();
-        if (buyerId <= 0)
-        {
-            return Unauthorized(new { message = "Invalid token or buyer profile not found." });
-        }
-        var result = await _cartAppService.RemovePropertyFromCartAsync(buyerId, propertyId);
-        if (!result)
-        {
-            return NotFound(new { success = false, message = $"Property with ID {propertyId} not found in cart." });
-        }
+        await _cartAppService.RemovePropertyFromCartAsync(CurrentBuyerId, id);
         return Ok(new { success = true, message = "Property removed from cart successfully." });
     }
 
+    // Logged-in Buyer retrieves their own cart items
     [HttpGet]
     [Authorize(Roles = "Buyer")]
     [Tags("Buyer")]
     public async Task<IActionResult> GetMyCart()
     {
-        var buyerId = GetTokenProfileId();
-        if (buyerId <= 0)
+        if (CurrentBuyerId <= 0)
         {
-            return Unauthorized(new { message = "Invalid token or buyer profile not found." });
+            return Ok(Enumerable.Empty<EnrichedCartItemDto>());
         }
+
+        var result = await _cartAppService.GetBuyerCartAsync(CurrentBuyerId);
+        return Ok(result);
+    }
+
+    // Admin or Buyer retrieves cart items by specific Buyer ID
+    [HttpGet("buyer/{buyerId:int}")]
+    [Authorize(Roles = "Buyer,Admin")]
+    [Tags("Buyer", "Admin")]
+    public async Task<IActionResult> GetCartByBuyerId(int buyerId)
+    {
         var result = await _cartAppService.GetBuyerCartAsync(buyerId);
         return Ok(result);
     }
 
+    // Clears all items in the logged-in buyer's cart
     [HttpDelete]
     [Authorize(Roles = "Buyer")]
     [Tags("Buyer")]
     public async Task<IActionResult> ClearMyCart()
     {
-        var buyerId = GetTokenProfileId();
-        if (buyerId <= 0)
-        {
-            return Unauthorized(new { message = "Invalid token or buyer profile not found." });
-        }
-        var result = await _cartAppService.ClearBuyerCartAsync(buyerId);
+        await _cartAppService.ClearBuyerCartAsync(CurrentBuyerId);
         return Ok(new { success = true, message = "Cart cleared successfully." });
     }
 }
