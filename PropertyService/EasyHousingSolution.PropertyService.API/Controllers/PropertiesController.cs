@@ -49,18 +49,7 @@ public class PropertiesController : ControllerBase
     [Authorize(Roles = "Seller")]
     public async Task<IActionResult> CreateProperty(CreatePropertyDto dto)
     {
-        var sellerId = CurrentProfileId;
-        if (sellerId <= 0 && dto.SellerId > 0)
-        {
-            sellerId = dto.SellerId;
-        }
-
-        if (sellerId <= 0)
-        {
-            return BadRequest(new { success = false, message = "A valid Seller profile is required." });
-        }
-
-        dto.SellerId = sellerId;
+        dto.SellerId = CurrentProfileId;
         var created = await _propertyService.CreatePropertyAsync(dto);
         return CreatedAtAction(nameof(GetPropertyById), new { id = created.PropertyId }, created);
     }
@@ -156,44 +145,30 @@ public class PropertiesController : ControllerBase
 
     // --- Buyer Purchase & Seller Sold Endpoints ---
 
-    [HttpGet("buyer/{buyerId:int}/purchases")]
     [HttpGet("my-purchases")]
     [Tags("Buyer")]
-    [Authorize(Roles = "Buyer,Admin")]
-    public async Task<IActionResult> GetBuyerPurchases(int? buyerId = null)
+    [Authorize(Roles = "Buyer")]
+    public async Task<IActionResult> GetMyPurchases()
     {
-        var targetBuyerId = (buyerId.HasValue && buyerId.Value > 0) ? buyerId.Value : CurrentProfileId;
-        if (targetBuyerId <= 0)
-        {
-            return Ok(Enumerable.Empty<PropertyResponseDto>());
-        }
+        var purchases = await _propertyService.GetPurchasedPropertiesByBuyerIdAsync(CurrentProfileId);
+        return Ok(purchases);
+    }
 
-        var purchases = await _propertyService.GetPurchasedPropertiesByBuyerIdAsync(targetBuyerId);
+    [HttpGet("buyer/{buyerId:int}/purchases")]
+    [Tags("Buyer", "Admin")]
+    [Authorize(Roles = "Buyer,Admin")]
+    public async Task<IActionResult> GetBuyerPurchases(int buyerId)
+    {
+        var purchases = await _propertyService.GetPurchasedPropertiesByBuyerIdAsync(buyerId);
         return Ok(purchases);
     }
 
     [HttpPost("{id:int}/buy")]
     [Tags("Buyer")]
     [Authorize(Roles = "Buyer")]
-    public async Task<IActionResult> BuyProperty(int id, [FromBody] BuyPropertyDto? dto)
+    public async Task<IActionResult> BuyProperty(int id)
     {
-        if (User.IsSeller())
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { success = false, message = "Sellers are not permitted to buy or rent properties." });
-        }
-
-        var buyerId = CurrentProfileId;
-        if (buyerId <= 0 && dto?.BuyerId != null && dto.BuyerId > 0)
-        {
-            buyerId = dto.BuyerId.Value;
-        }
-
-        if (buyerId <= 0)
-        {
-            return BadRequest(new { success = false, message = "A valid Buyer profile is required to purchase or rent a property." });
-        }
-
-        var bought = await _propertyService.BuyPropertyAsync(id, buyerId);
+        var bought = await _propertyService.BuyPropertyAsync(id, CurrentProfileId);
         return Ok(bought);
     }
 
@@ -253,7 +228,7 @@ public class PropertiesController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> RejectProperty(int id, [FromBody] DeactivatePropertyDto? dto)
     {
-        var reason = !string.IsNullOrWhiteSpace(dto?.Reason) ? dto.Reason : "Rejected by Administrator";
+        string reason = dto?.Reason ?? "Rejected by Administrator";
         var result = await _propertyService.DeactivatePropertyAsync(id, reason);
         return Ok(result);
     }

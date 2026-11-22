@@ -1,9 +1,20 @@
-import { Component, input, output, signal } from '@angular/core';
+// ============================================================================
+// Document: landing-page.component.ts
+// Project:  Easy Housing Solutions (EHS)
+// Module:   Authentication & Landing Page
+// Purpose:  Beginner-friendly Login and Registration (Buyer & Seller) component.
+// Description:
+//   Provides a simple tabbed interface to:
+//   1. Log in with existing credentials (Buyer, Seller, Admin)
+//   2. Register a new Buyer account
+//   3. Register a new Seller account with address and city selection
+// ============================================================================
+
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { State, City, UserSession } from '../../models/models';
-import { extractErrorMessage } from '../../utils/error.utils';
 
 @Component({
   selector: 'app-landing-page',
@@ -13,29 +24,33 @@ import { extractErrorMessage } from '../../utils/error.utils';
   styleUrl: './landing-page.component.css'
 })
 export class LandingPageComponent {
-  readonly states = input<State[]>([]);
-  readonly cities = input<City[]>([]);
+  // Input: Lists of states and cities for seller registration dropdowns
+  @Input() states: State[] = [];
+  @Input() cities: City[] = [];
 
-  readonly authSuccess = output<UserSession>();
-  readonly browseMarketplace = output<void>();
+  // Output: Emitted when login or registration succeeds
+  @Output() authSuccess = new EventEmitter<UserSession>();
 
+  // Currently active tab: 'login', 'buyer', or 'seller'
   activeTab: 'login' | 'buyer' | 'seller' = 'login';
-  loading = signal<boolean>(false);
-  errorMessage = signal<string | null>(null);
-  successMessage = signal<string | null>(null);
+  
+  // Status flags
+  loading: boolean = false;
+  errorMessage: string | null = null;
+  successMessage: string | null = null;
 
-  // Login form
+  // 1. Login Form Fields
   loginEmail = '';
   loginPassword = '';
 
-  // Buyer form
+  // 2. Buyer Registration Fields
   buyerName = '';
   buyerEmail = '';
   buyerPhone = '';
   buyerPassword = '';
   buyerDob = '';
 
-  // Seller form
+  // 3. Seller Registration Fields
   sellerName = '';
   sellerEmail = '';
   sellerPhone = '';
@@ -45,30 +60,35 @@ export class LandingPageComponent {
   sellerStateId: number | null = null;
   sellerCityId: number | null = null;
 
+  // Maximum allowed Date of Birth (must be at least 18 years old)
   readonly maxDobDate: string = (() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 18);
     return d.toISOString().split('T')[0];
   })();
 
+  // Filtered cities based on selected seller state
   filteredSellerCities: City[] = [];
 
   constructor(private authService: AuthService) {}
 
+  // Switch between Login, Buyer Register, and Seller Register tabs
   setTab(tab: 'login' | 'buyer' | 'seller'): void {
     this.activeTab = tab;
-    this.errorMessage.set(null);
-    this.successMessage.set(null);
+    this.errorMessage = null;
+    this.successMessage = null;
   }
 
+  // Filter cities when seller changes state
   onSellerStateChange(): void {
     if (!this.sellerStateId) {
       this.filteredSellerCities = [];
     } else {
-      this.filteredSellerCities = this.cities().filter(c => c.stateId === Number(this.sellerStateId));
+      this.filteredSellerCities = this.cities.filter(c => c.stateId === Number(this.sellerStateId));
     }
   }
 
+  // One-click demo credentials fill for quick testing / viva demo
   fillDemo(role: 'admin' | 'buyer' | 'seller'): void {
     if (role === 'admin') {
       this.loginEmail = 'admin@easysolution.com';
@@ -82,75 +102,61 @@ export class LandingPageComponent {
     }
   }
 
+  // Handle user login (Buyer, Seller, or Admin)
   handleLogin(): void {
-    if (!this.loginEmail.trim() || !this.loginPassword.trim()) {
-      this.errorMessage.set('Please enter both email and password.');
+    if (!this.loginEmail || !this.loginPassword) {
+      this.errorMessage = 'Please enter both email and password.';
       return;
     }
-    this.errorMessage.set(null);
-    this.loading.set(true);
+    this.errorMessage = null;
+    this.loading = true;
 
     this.authService.login({
       emailId: this.loginEmail,
       password: this.loginPassword
     }).subscribe({
       next: res => {
-        this.loading.set(false);
+        this.loading = false;
         if (res.success && res.data) {
           this.authSuccess.emit(res.data);
         } else {
           this.loginPassword = '';
-          this.errorMessage.set(res.message || 'Invalid email or password. Please check your credentials.');
+          this.errorMessage = res.message || 'Invalid email or password.';
         }
       },
       error: err => {
-        this.loading.set(false);
+        this.loading = false;
         this.loginPassword = '';
-        this.errorMessage.set(extractErrorMessage(err, 'Invalid email or password. Please verify your credentials.'));
+        this.errorMessage = err.error?.message || 'Invalid email or password. Please verify credentials.';
       }
     });
   }
 
+  // Handle Buyer registration
   handleRegisterBuyer(): void {
-    if (!this.buyerName.trim()) {
-      this.errorMessage.set('Full name is required.');
+    if (!this.buyerName) {
+      this.errorMessage = 'Full name is required.';
       return;
     }
-    if (!this.buyerEmail.trim()) {
-      this.errorMessage.set('Email address is required.');
+    if (!this.buyerEmail) {
+      this.errorMessage = 'Email address is required.';
       return;
     }
     if (!this.buyerDob) {
-      this.errorMessage.set('Date of birth is required.');
+      this.errorMessage = 'Date of birth is required.';
       return;
     }
-    const buyerBirth = new Date(this.buyerDob);
-    const today = new Date();
-    if (buyerBirth > today) {
-      this.errorMessage.set('Date of birth cannot be in the future.');
+    if (!/^[6-9]\d{9}$/.test(this.buyerPhone)) {
+      this.errorMessage = 'Mobile number must be 10 digits starting with 6, 7, 8, or 9.';
       return;
     }
-    const bAgeDiff = today.getFullYear() - buyerBirth.getFullYear();
-    const bMonthDiff = today.getMonth() - buyerBirth.getMonth();
-    const bDayDiff = today.getDate() - buyerBirth.getDate();
-    const buyerAge = (bMonthDiff < 0 || (bMonthDiff === 0 && bDayDiff < 0)) ? bAgeDiff - 1 : bAgeDiff;
-    if (buyerAge < 18) {
-      this.errorMessage.set('Buyer must be at least 18 years old to register.');
-      return;
-    }
-
-    if (!/^[6-9]\d{9}$/.test(this.buyerPhone.trim())) {
-      this.errorMessage.set('Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.');
-      return;
-    }
-
     if (!this.buyerPassword || this.buyerPassword.length < 6) {
-      this.errorMessage.set('Password must be at least 6 characters.');
+      this.errorMessage = 'Password must be at least 6 characters.';
       return;
     }
 
-    this.errorMessage.set(null);
-    this.loading.set(true);
+    this.errorMessage = null;
+    this.loading = true;
 
     this.authService.registerBuyer({
       fullName: this.buyerName,
@@ -160,72 +166,53 @@ export class LandingPageComponent {
       mobileNo: this.buyerPhone
     }).subscribe({
       next: res => {
-        this.loading.set(false);
+        this.loading = false;
         if (res.success && res.data) {
           this.authSuccess.emit(res.data);
         } else {
-          this.buyerPassword = '';
-          this.errorMessage.set(res.message || 'Registration failed.');
+          this.errorMessage = res.message || 'Registration failed.';
         }
       },
       error: err => {
-        this.loading.set(false);
-        this.buyerPassword = '';
-        this.errorMessage.set(extractErrorMessage(err, 'Failed to register buyer. Please check your details.'));
+        this.loading = false;
+        this.errorMessage = err.error?.message || 'Failed to register buyer.';
       }
     });
   }
 
+  // Handle Seller registration
   handleRegisterSeller(): void {
-    if (!this.sellerName.trim()) {
-      this.errorMessage.set('Seller / Company name is required.');
+    if (!this.sellerName) {
+      this.errorMessage = 'Seller name is required.';
       return;
     }
-    if (!this.sellerEmail.trim()) {
-      this.errorMessage.set('Email address is required.');
+    if (!this.sellerEmail) {
+      this.errorMessage = 'Email address is required.';
       return;
     }
     if (!this.sellerDob) {
-      this.errorMessage.set('Date of birth is required for seller registration.');
+      this.errorMessage = 'Date of birth is required.';
       return;
     }
-    const sellerBirth = new Date(this.sellerDob);
-    const today = new Date();
-    if (sellerBirth > today) {
-      this.errorMessage.set('Date of birth cannot be in the future.');
+    if (!/^[6-9]\d{9}$/.test(this.sellerPhone)) {
+      this.errorMessage = 'Mobile number must be 10 digits starting with 6, 7, 8, or 9.';
       return;
     }
-    const sAgeDiff = today.getFullYear() - sellerBirth.getFullYear();
-    const sMonthDiff = today.getMonth() - sellerBirth.getMonth();
-    const sDayDiff = today.getDate() - sellerBirth.getDate();
-    const sellerAge = (sMonthDiff < 0 || (sMonthDiff === 0 && sDayDiff < 0)) ? sAgeDiff - 1 : sAgeDiff;
-    if (sellerAge < 18) {
-      this.errorMessage.set('Seller must be at least 18 years old to register.');
-      return;
-    }
-
-    if (!/^[6-9]\d{9}$/.test(this.sellerPhone.trim())) {
-      this.errorMessage.set('Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.');
-      return;
-    }
-
     if (!this.sellerStateId || !this.sellerCityId) {
-      this.errorMessage.set('Please select both State and City.');
+      this.errorMessage = 'Please select both State and City.';
       return;
     }
-
-    if (!this.sellerAddress.trim()) {
-      this.errorMessage.set('Address is required.');
+    if (!this.sellerAddress) {
+      this.errorMessage = 'Address is required.';
       return;
     }
-
     if (!this.sellerPassword || this.sellerPassword.length < 6) {
-      this.errorMessage.set('Password must be at least 6 characters.');
+      this.errorMessage = 'Password must be at least 6 characters.';
       return;
     }
 
-    this.errorMessage.set(null);
-    this.loading.set(true);
+    this.errorMessage = null;
+    this.loading = true;
 
     this.authService.registerSeller({
       fullName: this.sellerName,
@@ -238,18 +225,16 @@ export class LandingPageComponent {
       dateofBirth: this.sellerDob
     }).subscribe({
       next: res => {
-        this.loading.set(false);
+        this.loading = false;
         if (res.success && res.data) {
           this.authSuccess.emit(res.data);
         } else {
-          this.sellerPassword = '';
-          this.errorMessage.set(res.message || 'Seller registration failed.');
+          this.errorMessage = res.message || 'Seller registration failed.';
         }
       },
       error: err => {
-        this.loading.set(false);
-        this.sellerPassword = '';
-        this.errorMessage.set(extractErrorMessage(err, 'Failed to register seller. Please check your details.'));
+        this.loading = false;
+        this.errorMessage = err.error?.message || 'Failed to register seller.';
       }
     });
   }

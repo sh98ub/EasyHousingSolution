@@ -1,0 +1,324 @@
+<div class="user-dashboard-container">
+  <!-- 1. Header Banner -->
+  <header class="dashboard-header">
+    <div class="header-info">
+      <h2>👋 Welcome, {{ buyerName }}</h2>
+      <p class="header-subtitle">Buyer Portal: Search verified properties, bookmark favorites, and contact owners directly.</p>
+    </div>
+    <!-- Tab Navigation -->
+    <div class="dashboard-tabs">
+      <button
+        type="button"
+        class="dash-tab"
+        [class.active]="activeTab === 'browse'"
+        (click)="activeTab = 'browse'"
+      >
+        🔍 Browse Properties
+      </button>
+      <button
+        type="button"
+        class="dash-tab"
+        [class.active]="activeTab === 'cart'"
+        (click)="activeTab = 'cart'"
+      >
+        🛒 My Wishlist Cart ({{ cartItems.length }})
+      </button>
+      <button
+        type="button"
+        class="dash-tab"
+        [class.active]="activeTab === 'purchases'"
+        (click)="activeTab = 'purchases'; loadPurchases()"
+      >
+        📑 My Purchases
+      </button>
+    </div>
+  </header>
+
+  <!-- Alert Banner -->
+  @if (alertMessage) {
+    <div class="dashboard-alert" [class.alert-success]="alertType === 'success'" [class.alert-error]="alertType === 'error'">
+      <span>{{ alertMessage }}</span>
+      <button type="button" class="alert-close" (click)="alertMessage = null">✕</button>
+    </div>
+  }
+
+  <!-- ==================================================================== -->
+  <!-- TAB 1: BROWSE & SEARCH PROPERTIES (Req 10, 11, 12)                    -->
+  <!-- ==================================================================== -->
+  @if (activeTab === 'browse') {
+    <section class="browse-section">
+      <!-- Search & Filter Controls -->
+      <div class="search-filter-card">
+        <div class="filter-row">
+          <!-- State Filter -->
+          <div class="filter-field">
+            <label>State</label>
+            <select [(ngModel)]="selectedStateId" (change)="onStateChange()">
+              <option [ngValue]="null">All States</option>
+              @for (st of states; track st.stateId) {
+                <option [ngValue]="st.stateId">{{ st.stateName }}</option>
+              }
+            </select>
+          </div>
+
+          <!-- City Filter -->
+          <div class="filter-field">
+            <label>City</label>
+            <select [(ngModel)]="selectedCityId">
+              <option [ngValue]="null">All Cities</option>
+              @for (ct of filteredCities; track ct.cityId) {
+                <option [ngValue]="ct.cityId">{{ ct.cityName }}</option>
+              }
+            </select>
+          </div>
+
+          <!-- Property Type Filter -->
+          <div class="filter-field">
+            <label>Property Type</label>
+            <select [(ngModel)]="selectedType">
+              <option value="">All Types</option>
+              <option value="Apartment">Apartment</option>
+              <option value="Villa">Villa</option>
+              <option value="Plot">Plot</option>
+              <option value="Commercial">Commercial</option>
+            </select>
+          </div>
+
+          <!-- Purpose (Buy / Rent) -->
+          <div class="filter-field">
+            <label>Purpose</label>
+            <select [(ngModel)]="selectedOption">
+              <option value="">Any (Buy or Rent)</option>
+              <option value="Sell">For Sale (Buy)</option>
+              <option value="Rent">For Rent</option>
+            </select>
+          </div>
+
+          <!-- Sort by Price (Req 10) -->
+          <div class="filter-field">
+            <label>Sort By</label>
+            <select [(ngModel)]="selectedSort" (change)="applySorting()">
+              <option value="name">Property Name (A-Z)</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+            </select>
+          </div>
+
+          <!-- Filter Action Buttons -->
+          <div class="filter-actions">
+            <button type="button" class="btn-search" (click)="onSearch()">Search</button>
+            <button type="button" class="btn-reset" (click)="onResetSearch()">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Properties Grid -->
+      @if (loading) {
+        <div class="loading-box">Loading verified properties...</div>
+      } @else if (properties.length === 0) {
+        <div class="empty-state">
+          <h3>No properties found matching your search.</h3>
+          <p>Try clearing your filters or selecting a different city.</p>
+          <button type="button" class="btn-search" (click)="onResetSearch()">View All Properties</button>
+        </div>
+      } @else {
+        <div class="property-grid">
+          @for (prop of properties; track prop.propertyId) {
+            <app-property-card
+              [property]="prop"
+              [isBuyer]="true"
+              [isInCart]="isPropertyInCart(prop.propertyId)"
+              (getContact)="onContactOwner($event)"
+              (toggleCart)="onToggleCart($event)"
+              (viewDetails)="onViewDetails($event)"
+              (buy)="onBuyProperty($event)"
+            />
+          }
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ==================================================================== -->
+  <!-- TAB 2: MY BOOKMARK CART (Req 13, 14)                                  -->
+  <!-- ==================================================================== -->
+  @if (activeTab === 'cart') {
+    <section class="cart-section">
+      <div class="cart-header-row">
+        <h3>Saved Properties in Your Cart ({{ cartItems.length }})</h3>
+        @if (cartItems.length > 0) {
+          <button type="button" class="btn-clear-cart" (click)="onClearCart()">🗑️ Clear Entire Cart</button>
+        }
+      </div>
+
+      @if (cartItems.length === 0) {
+        <div class="empty-state">
+          <h3>Your wishlist cart is empty.</h3>
+          <p>Browse properties and click <strong>"Save"</strong> on any property card to bookmark it here.</p>
+          <button type="button" class="btn-search" (click)="activeTab = 'browse'">Explore Properties</button>
+        </div>
+      } @else {
+        <div class="cart-table-card">
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Type</th>
+                <th>Option</th>
+                <th>Price</th>
+                <th>Location</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of cartItems; track item.cartId) {
+                <tr>
+                  <td>
+                    <strong>{{ item.property?.propertyName || ('Property #' + item.propertyId) }}</strong>
+                  </td>
+                  <td>{{ item.property?.propertyType || '-' }}</td>
+                  <td>
+                    <span class="badge" [class.badge-rent]="item.property?.propertyOption === 'Rent'">
+                      {{ item.property?.propertyOption === 'Rent' ? 'Rent' : 'Buy' }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>₹{{ item.property?.priceRange?.toLocaleString('en-IN') || '0' }}</strong>
+                  </td>
+                  <td>{{ item.property?.landmark }}, {{ item.property?.address }}</td>
+                  <td class="action-cell">
+                    @if (item.property?.sellerId) {
+                      <button type="button" class="btn-sm-contact" (click)="onContactOwner(item.property!.sellerId)">
+                        📞 Contact Owner
+                      </button>
+                    }
+                    <button type="button" class="btn-sm-remove" (click)="onRemoveFromCart(item.propertyId)">
+                      ✕ Remove
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ==================================================================== -->
+  <!-- TAB 3: PURCHASE HISTORY                                              -->
+  <!-- ==================================================================== -->
+  @if (activeTab === 'purchases') {
+    <section class="purchases-section">
+      <h3>Your Purchased / Rented Properties</h3>
+      @if (purchasedProperties.length === 0) {
+        <div class="empty-state">
+          <p>You have not purchased or rented any properties yet.</p>
+          <button type="button" class="btn-search" (click)="activeTab = 'browse'">Find Properties to Buy</button>
+        </div>
+      } @else {
+        <div class="cart-table-card">
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Property Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Amount</th>
+                <th>Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (prop of purchasedProperties; track prop.propertyId) {
+                <tr>
+                  <td><strong>{{ prop.propertyName }}</strong></td>
+                  <td>{{ prop.propertyType }}</td>
+                  <td><span class="badge badge-success">{{ prop.deactivationReason || 'Purchased' }}</span></td>
+                  <td>₹{{ prop.priceRange?.toLocaleString('en-IN') }}</td>
+                  <td>{{ prop.landmark }}, {{ prop.address }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ==================================================================== -->
+  <!-- OWNER CONTACT DETAILS MODAL (Req 11)                                 -->
+  <!-- ==================================================================== -->
+  @if (showContactModal && selectedContact) {
+    <div class="modal-backdrop" (click)="closeContactModal()">
+      <div class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>📞 Property Owner Contact Details</h3>
+          <button type="button" class="modal-close-btn" (click)="closeContactModal()">✕</button>
+        </div>
+        <div class="modal-body contact-body">
+          <div class="contact-info-row">
+            <span class="info-label">Owner Name:</span>
+            <span class="info-value"><strong>{{ selectedContact.fullName }}</strong></span>
+          </div>
+          <div class="contact-info-row">
+            <span class="info-label">Email:</span>
+            <span class="info-value">
+              <a [href]="'mailto:' + selectedContact.emailId">{{ selectedContact.emailId }}</a>
+            </span>
+          </div>
+          <div class="contact-info-row">
+            <span class="info-label">Phone Number:</span>
+            <span class="info-value">
+              <a [href]="'tel:' + selectedContact.phoneNo">{{ selectedContact.phoneNo }}</a>
+            </span>
+          </div>
+          <div class="contact-notice">
+            <p>💡 You can call or email the owner directly to arrange a property visit or negotiate terms.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-search" (click)="closeContactModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ==================================================================== -->
+  <!-- PROPERTY DETAIL MODAL                                                -->
+  <!-- ==================================================================== -->
+  @if (showDetailModal && selectedDetailProperty) {
+    <div class="modal-backdrop" (click)="closeDetailModal()">
+      <div class="modal-card detail-modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>{{ selectedDetailProperty.propertyName }}</h3>
+          <button type="button" class="modal-close-btn" (click)="closeDetailModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          @if (selectedDetailProperty.primaryImage) {
+            <img [src]="selectedDetailProperty.primaryImage" class="modal-prop-img" [alt]="selectedDetailProperty.propertyName" />
+          }
+          <div class="detail-grid">
+            <div><strong>Type:</strong> {{ selectedDetailProperty.propertyType }}</div>
+            <div><strong>Purpose:</strong> {{ selectedDetailProperty.propertyOption === 'Rent' ? 'For Rent' : 'For Sale' }}</div>
+            <div><strong>Price:</strong> ₹{{ selectedDetailProperty.priceRange?.toLocaleString('en-IN') }}</div>
+            <div><strong>Deposit:</strong> ₹{{ selectedDetailProperty.initialDeposit?.toLocaleString('en-IN') || 0 }}</div>
+            <div><strong>Landmark:</strong> {{ selectedDetailProperty.landmark }}</div>
+            <div><strong>Address:</strong> {{ selectedDetailProperty.address }}</div>
+          </div>
+          @if (selectedDetailProperty.description) {
+            <div class="desc-box">
+              <strong>Description:</strong>
+              <p>{{ selectedDetailProperty.description }}</p>
+            </div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-contact-owner" (click)="onContactOwner(selectedDetailProperty.sellerId); closeDetailModal()">
+            📞 Contact Owner
+          </button>
+          <button type="button" class="btn-reset" (click)="closeDetailModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

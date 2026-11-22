@@ -43,20 +43,20 @@
     </div>
 
     <!-- Alert Banners -->
-    @if (errorMessage()) {
+    @if (errorMessage) {
       <div class="alert alert-error">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
         </svg>
-        <span>{{ errorMessage() }}</span>
+        <span>{{ errorMessage }}</span>
       </div>
     }
-    @if (successMessage()) {
+    @if (successMessage) {
       <div class="alert alert-success">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
         </svg>
-        <span>{{ successMessage() }}</span>
+        <span>{{ successMessage }}</span>
       </div>
     }
 
@@ -87,8 +87,8 @@
           />
         </div>
 
-        <button type="submit" class="btn-submit" [disabled]="loading()">
-          {{ loading() ? 'Signing In...' : 'LOGIN' }}
+        <button type="submit" class="btn-submit" [disabled]="loading">
+          {{ loading ? 'Signing In...' : 'LOGIN' }}
         </button>
 
         <!-- Quick Demo Credentials Chips for Effortless Testing -->
@@ -167,8 +167,8 @@
           />
         </div>
 
-        <button type="submit" class="btn-submit" [disabled]="loading()">
-          {{ loading() ? 'Creating Buyer Account...' : 'CREATE BUYER ACCOUNT' }}
+        <button type="submit" class="btn-submit" [disabled]="loading">
+          {{ loading ? 'Creating Buyer Account...' : 'CREATE BUYER ACCOUNT' }}
         </button>
       </form>
     }
@@ -238,7 +238,7 @@
               required
             >
               <option [ngValue]="null">Select State</option>
-              @for (s of states(); track s.stateId) {
+              @for (s of states; track s.stateId) {
                 <option [ngValue]="s.stateId">{{ s.stateName }}</option>
               }
             </select>
@@ -287,17 +287,17 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-submit" [disabled]="loading()">
-          {{ loading() ? 'Registering Seller...' : 'CREATE SELLER ACCOUNT' }}
+        <button type="submit" class="btn-submit" [disabled]="loading">
+          {{ loading ? 'Registering Seller...' : 'CREATE SELLER ACCOUNT' }}
         </button>
       </form>
     }
 
-    <!-- Subtle Guest Link at Bottom -->
+    <!-- Quick Demo Login Helpers -->
     <div class="guest-footer">
-      <span>Just browsing?</span>
-      <button type="button" class="btn-guest-link" (click)="browseMarketplace.emit()">
-        Explore marketplace as guest &rarr;
+      <span>Quick Demo:</span>
+      <button type="button" class="btn-guest-link" (click)="fillDemo('buyer'); handleLogin()">
+        Demo as Buyer &rarr;
       </button>
     </div>
   </div>

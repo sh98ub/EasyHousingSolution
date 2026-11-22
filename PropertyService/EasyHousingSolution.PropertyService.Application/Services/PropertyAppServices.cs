@@ -52,14 +52,14 @@ public class PropertyAppService : IPropertyAppService
 
         var property = new Property
         {
-            PropertyName = dto.PropertyName.Trim(),
-            PropertyType = dto.PropertyType.Trim(),
-            PropertyOption = dto.PropertyOption.Trim(),
-            Description = dto.Description?.Trim(),
-            Address = dto.Address.Trim(),
+            PropertyName = dto.PropertyName,
+            PropertyType = dto.PropertyType,
+            PropertyOption = dto.PropertyOption,
+            Description = dto.Description,
+            Address = dto.Address,
             PriceRange = dto.PriceRange,
             InitialDeposit = dto.PropertyOption.Equals("Rent", StringComparison.OrdinalIgnoreCase) ? dto.InitialDeposit : 0,
-            Landmark = dto.Landmark.Trim(),
+            Landmark = dto.Landmark,
             IsActive = false, // Pending admin verification
             SellerId = dto.SellerId,
             CityId = dto.CityId
@@ -87,14 +87,14 @@ public class PropertyAppService : IPropertyAppService
         if (existing == null)
             throw new KeyNotFoundException($"Property with ID {id} not found.");
 
-        existing.PropertyName = dto.PropertyName.Trim();
-        existing.PropertyType = dto.PropertyType.Trim();
-        existing.PropertyOption = dto.PropertyOption.Trim();
-        existing.Description = dto.Description?.Trim();
-        existing.Address = dto.Address.Trim();
+        existing.PropertyName = dto.PropertyName;
+        existing.PropertyType = dto.PropertyType;
+        existing.PropertyOption = dto.PropertyOption;
+        existing.Description = dto.Description;
+        existing.Address = dto.Address;
         existing.PriceRange = dto.PriceRange;
         existing.InitialDeposit = dto.PropertyOption.Equals("Rent", StringComparison.OrdinalIgnoreCase) ? dto.InitialDeposit : 0;
-        existing.Landmark = dto.Landmark.Trim();
+        existing.Landmark = dto.Landmark;
         existing.CityId = dto.CityId;
 
         await _propertyRepository.UpdateAsync(existing);
@@ -165,7 +165,7 @@ public class PropertyAppService : IPropertyAppService
             throw new KeyNotFoundException($"Property with ID {id} not found.");
 
         property.IsActive = false;
-        property.DeactivationReason = reason.Trim();
+        property.DeactivationReason = reason;
 
         await _propertyRepository.UpdateAsync(property);
         return MapToDto(property);
@@ -188,7 +188,11 @@ public class PropertyAppService : IPropertyAppService
         property.DeactivationReason = $"{actionVerb} to Buyer #{buyerId}";
 
         await _propertyRepository.UpdateAsync(property);
-        return MapToDto(property);
+
+        var response = MapToDto(property);
+        // Guid-based unique booking confirmation code:
+        response.BookingReference = "EHS-" + Guid.NewGuid().ToString("N")[..8].ToUpper();
+        return response;
     }
 
     public async Task<IEnumerable<PropertyResponseDto>> GetPurchasedPropertiesByBuyerIdAsync(int buyerId)

@@ -24,13 +24,17 @@ public class GlobalExceptionMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // Guid-based request correlation tracking across microservices
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+        context.Response.Headers.TryAdd("X-Correlation-ID", correlationId);
+
         try
         {
             await _next(context);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception caught by GlobalExceptionMiddleware: {Message}", ex.Message);
+            _logger.LogError(ex, "[CorrelationId:{CorrelationId}] Exception: {Message}", correlationId, ex.Message);
             await HandleExceptionAsync(context, ex);
         }
     }

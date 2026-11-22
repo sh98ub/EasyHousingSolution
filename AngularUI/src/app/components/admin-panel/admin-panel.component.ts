@@ -1,11 +1,22 @@
-import { Component, input, output, signal, effect } from '@angular/core';
+// ============================================================================
+// Document: admin-panel.component.ts
+// Project:  Easy Housing Solutions (EHS)
+// Module:   Administrator Dashboard
+// Purpose:  Dedicated dashboard for system administrators.
+// Description:
+//   Fulfills Capgemini Administrator Requirements:
+//   - Req 7: View properties by Region (State and City filter)
+//   - Req 8: View properties by Owner (Seller ID search)
+//   - Req 9: Verify properties, or Deactivate with a mandatory reason
+//   - View registered users (Buyers & Sellers)
+// ============================================================================
+
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PropertyService } from '../../services/property.service';
 import { UserService } from '../../services/user.service';
-import { CartService } from '../../services/cart.service';
-import { Property, City, UserSummary, EnrichedCartItem } from '../../models/models';
-import { extractErrorMessage } from '../../utils/error.utils';
+import { Property, City, State, UserSummary } from '../../models/models';
 
 @Component({
   selector: 'app-admin-panel',
@@ -14,217 +25,187 @@ import { extractErrorMessage } from '../../utils/error.utils';
   templateUrl: './admin-panel.component.html',
   styleUrl: './admin-panel.component.css'
 })
-export class AdminPanelComponent {
-  readonly isOpen = input<boolean>(true);
-  readonly isDashboard = input<boolean>(false);
-  readonly cities = input<City[]>([]);
+export class AdminPanelComponent implements OnInit {
+  // Navigation tab inside Admin dashboard: 'properties' or 'users'
+  activeTab: 'properties' | 'users' = 'properties';
 
-  readonly close = output<void>();
-  readonly propertyStatusChanged = output<void>();
-  readonly switchView = output<void>();
+  // Master lists
+  states: State[] = [];
+  cities: City[] = [];
+  filteredCities: City[] = [];
+  allProperties: Property[] = [];
+  allUsers: UserSummary[] = [];
 
-  activeTab: 'properties' | 'users' | 'sales' = 'properties';
-  propFilter: 'all' | 'pending' | 'verified' | 'sold' = 'all';
+  // Loading & Alert state
+  loading: boolean = false;
+  alertMessage: string | null = null;
+  alertType: 'success' | 'error' = 'success';
 
-  allProperties = signal<Property[]>([]);
-  allUsers = signal<UserSummary[]>([]);
-  salesReport = signal<any | null>(null);
+  // Req 7: Region Filters (State & City)
+  selectedStateId: number | null = null;
+  selectedCityId: number | null = null;
 
-  alertMessage = signal<string | null>(null);
-  alertType = signal<'success' | 'error'>('success');
+  // Req 8: Owner Filter (Seller ID)
+  searchSellerId: number | null = null;
 
+  // Status Filter: 'all', 'pending', 'verified', 'deactivated'
+  statusFilter: string = 'all';
+
+  // Req 9: Deactivate with Reason Modal State
   deactivatingPropertyId: number | null = null;
   deactivateReason: string = '';
-
-  inspectingBuyer = signal<UserSummary | null>(null);
-  inspectedCart = signal<EnrichedCartItem[]>([]);
+  showDeactivateModal: boolean = false;
 
   constructor(
     private propertyService: PropertyService,
-    private userService: UserService,
-    private cartService: CartService
-  ) {
-    effect(() => {
-      if (this.isOpen()) {
-        this.loadProperties();
-      }
-    });
+    private userService: UserService
+  ) {}
+
+  ngOnInit(): void {
+    this.loadStatesAndCities();
+    this.loadAllProperties();
+    this.loadAllUsers();
   }
 
-  inspectBuyerCart(buyer: UserSummary): void {
-    this.inspectingBuyer.set(buyer);
-    this.inspectedCart.set([]);
-    this.cartService.getBuyerCart(buyer.profileId).subscribe({
+  // Load States and Cities for Region filters (Req 7)
+  loadStatesAndCities(): void {
+    this.propertyService.getStates().subscribe({
+      next: res => { if (res.success) this.states = res.data; }
+    });
+    this.propertyService.getCities().subscribe({
       next: res => {
-        if (res.success && res.data) {
-          this.inspectedCart.set(res.data);
-        } else {
-          this.inspectedCart.set([]);
-        }
-      },
-      error: () => this.inspectedCart.set([])
-    });
-  }
-
-  closeCartInspection(): void {
-    this.inspectingBuyer.set(null);
-    this.inspectedCart.set([]);
-  }
-
-  deactivateUser(user: UserSummary): void {
-    const userId = user.profileId || 1;
-    this.userService.deactivateUser(userId, 'Deactivated by administrator').subscribe({
-      next: () => {
-        user.isActive = false;
-        this.alertMessage.set(`User #${userId} deactivated successfully.`);
-        this.alertType.set('success');
-      },
-      error: err => {
-        this.alertMessage.set(extractErrorMessage(err, 'Could not deactivate user.'));
-        this.alertType.set('error');
-      }
-    });
-  }
-
-  deleteUser(user: UserSummary): void {
-    if (!confirm(`Are you sure you want to permanently delete user ${user.fullName || user.userName}?`)) {
-      return;
-    }
-    const userId = user.profileId || 1;
-    this.userService.deleteUser(userId).subscribe({
-      next: () => {
-        this.allUsers.set(this.allUsers().filter(u => u !== user));
-        this.alertMessage.set(`User #${userId} deleted successfully.`);
-        this.alertType.set('success');
-      },
-      error: err => {
-        this.alertMessage.set(extractErrorMessage(err, 'Could not delete user.'));
-        this.alertType.set('error');
-      }
-    });
-  }
-
-  get filteredProperties(): Property[] {
-    if (this.propFilter === 'verified') {
-      return this.allProperties().filter(p => p.isActive);
-    }
-    if (this.propFilter === 'sold') {
-      return this.allProperties().filter(p => !p.isActive && p.deactivationReason?.startsWith('Sold'));
-    }
-    if (this.propFilter === 'pending') {
-      return this.allProperties().filter(p => !p.isActive && !p.deactivationReason?.startsWith('Sold'));
-    }
-    return this.allProperties();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement).classList.contains('modal-backdrop')) {
-      this.close.emit();
-    }
-  }
-
-  switchToUsers(): void {
-    this.activeTab = 'users';
-    this.loadUsers();
-  }
-
-  switchToSales(): void {
-    this.activeTab = 'sales';
-    this.loadSalesReport();
-  }
-
-  loadSalesReport(): void {
-    this.propertyService.getAdminSalesReport().subscribe({
-      next: res => {
-        if (res.success && res.data) {
-          this.salesReport.set(res.data);
+        if (res.success) {
+          this.cities = res.data;
+          this.filteredCities = res.data;
         }
       }
     });
   }
 
-  formatPrice(price: number): string {
-    if (!price || price <= 0) return '₹0';
-    if (price >= 10000000) {
-      const cr = price / 10000000;
-      return `₹${cr.toFixed(2).replace(/\.00$/, '')} Cr`;
+  // Filter city options when state changes
+  onStateChange(): void {
+    if (!this.selectedStateId) {
+      this.filteredCities = this.cities;
+    } else {
+      this.filteredCities = this.cities.filter(c => c.stateId === Number(this.selectedStateId));
     }
-    if (price >= 100000) {
-      const lk = price / 100000;
-      return `₹${lk.toFixed(1).replace(/\.0$/, '')} Lakh`;
-    }
-    return `₹${price.toLocaleString('en-IN')}`;
+    this.selectedCityId = null;
   }
 
-  loadProperties(): void {
+  // Load all properties for admin review
+  loadAllProperties(): void {
+    this.loading = true;
     this.propertyService.getAllPropertiesAdmin().subscribe({
       next: res => {
+        this.loading = false;
         if (res.success && res.data) {
-          this.allProperties.set(res.data);
+          this.allProperties = res.data;
         }
+      },
+      error: () => {
+        this.loading = false;
+        this.showAlert('Could not load properties.', 'error');
       }
     });
   }
 
-  loadUsers(): void {
+  // Load all registered users
+  loadAllUsers(): void {
     this.userService.getAllUsers().subscribe({
       next: res => {
         if (res.success && res.data) {
-          this.allUsers.set(res.data);
+          this.allUsers = res.data;
         }
       }
     });
   }
 
-  handleVerify(propertyId: number): void {
+  // Filtered properties based on Region (Req 7), Owner (Req 8), and Status
+  get filteredProperties(): Property[] {
+    return this.allProperties.filter(p => {
+      // Req 7: Region filter (City)
+      if (this.selectedCityId && p.cityId !== Number(this.selectedCityId)) {
+        return false;
+      }
+      // Req 8: Owner filter (Seller ID)
+      if (this.searchSellerId && p.sellerId !== Number(this.searchSellerId)) {
+        return false;
+      }
+      // Status filter
+      if (this.statusFilter === 'verified' && !p.isActive) return false;
+      if (this.statusFilter === 'deactivated' && p.isActive) return false;
+      return true;
+    });
+  }
+
+  // Reset all admin filters
+  resetFilters(): void {
+    this.selectedStateId = null;
+    this.selectedCityId = null;
+    this.searchSellerId = null;
+    this.statusFilter = 'all';
+    this.filteredCities = this.cities;
+  }
+
+  // Req 9: Verify / Approve Property
+  verifyProperty(propertyId: number): void {
     this.propertyService.verifyProperty(propertyId).subscribe({
       next: res => {
-        if (res.success) {
-          this.showAlert(`Property #${propertyId} successfully verified & published!`, 'success');
-          this.loadProperties();
-          this.propertyStatusChanged.emit();
-        } else {
-          this.showAlert(res.message || 'Verification failed.', 'error');
-        }
+        this.showAlert('Property has been successfully verified & published!', 'success');
+        this.loadAllProperties();
       },
       error: err => {
-        this.showAlert(extractErrorMessage(err, 'Verification failed.'), 'error');
+        this.showAlert(err.error?.message || 'Failed to verify property.', 'error');
       }
     });
   }
 
-  openDeactivatePrompt(propertyId: number): void {
+  // Req 9: Open Deactivation Modal with Mandatory Reason
+  openDeactivateModal(propertyId: number): void {
     this.deactivatingPropertyId = propertyId;
+    this.deactivateReason = '';
+    this.showDeactivateModal = true;
+  }
+
+  // Req 9: Confirm Deactivation with Reason
+  confirmDeactivate(): void {
+    if (!this.deactivateReason) {
+      alert('Mandatory Rule: You must provide a valid reason to deactivate a property listing.');
+      return;
+    }
+    if (!this.deactivatingPropertyId) return;
+
+    this.propertyService.deactivateProperty(this.deactivatingPropertyId, this.deactivateReason).subscribe({
+      next: res => {
+        this.showAlert('Property listing has been deactivated with reason recorded.', 'success');
+        this.showDeactivateModal = false;
+        this.deactivatingPropertyId = null;
+        this.deactivateReason = '';
+        this.loadAllProperties();
+      },
+      error: err => {
+        this.showAlert(err.error?.message || 'Failed to deactivate property.', 'error');
+      }
+    });
+  }
+
+  // Close Deactivation modal
+  closeDeactivateModal(): void {
+    this.showDeactivateModal = false;
+    this.deactivatingPropertyId = null;
     this.deactivateReason = '';
   }
 
-  confirmDeactivate(): void {
-    if (!this.deactivatingPropertyId || !this.deactivateReason.trim()) return;
-
-    const pid = this.deactivatingPropertyId;
-    this.propertyService.deactivateProperty(pid, this.deactivateReason.trim()).subscribe({
-      next: res => {
-        this.deactivatingPropertyId = null;
-        if (res.success) {
-          this.showAlert(`Property #${pid} has been deactivated.`, 'success');
-          this.loadProperties();
-          this.propertyStatusChanged.emit();
-        } else {
-          this.showAlert(res.message || 'Failed to deactivate property.', 'error');
-        }
-      },
-      error: err => {
-        this.deactivatingPropertyId = null;
-        this.showAlert(extractErrorMessage(err, 'Failed to deactivate property.'), 'error');
-      }
-    });
+  // Helper to get city name by cityId
+  getCityName(cityId: number): string {
+    const found = this.cities.find(c => c.cityId === cityId);
+    return found ? found.cityName : `City #${cityId}`;
   }
 
-  private showAlert(msg: string, type: 'success' | 'error'): void {
-    this.alertMessage.set(msg);
-    this.alertType.set(type);
-    setTimeout(() => {
-      this.alertMessage.set(null);
-    }, 4000);
+  // Show temporary alert message
+  showAlert(msg: string, type: 'success' | 'error'): void {
+    this.alertMessage = msg;
+    this.alertType = type;
+    setTimeout(() => { this.alertMessage = null; }, 4000);
   }
 }

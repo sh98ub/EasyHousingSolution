@@ -102,6 +102,11 @@ public class PropertyResponseDto
     public string? PrimaryImage { get; set; }
     public int ImageCount { get; set; }
     public List<string> Images { get; set; } = new();
+
+    /// <summary>
+    /// Unique booking or transaction reference code generated using Guid.
+    /// </summary>
+    public string? BookingReference { get; set; }
 }
 
 public class StateDto
@@ -130,6 +135,7 @@ public class PropertyImageDto
     public int ImageId { get; set; }
     public int PropertyId { get; set; }
     public string ImageData { get; set; } = string.Empty;
+    public string ImageKey { get; set; } = Guid.NewGuid().ToString("N")[..8];
 }
 
 public class UploadImagesDto

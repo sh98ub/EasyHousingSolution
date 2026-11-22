@@ -1,238 +1,38 @@
 <div class="app-layout">
-  <!-- MMT Top Navigation Bar -->
+  <!-- Top Navigation Bar -->
   <app-navbar
-    [currentView]="currentView()"
-    (openAuth)="isAuthOpen.set(true)"
-    (openCart)="openBuyerCart('cart')"
-    (openPurchases)="openBuyerCart('purchases')"
-    (openPostProperty)="handleOpenPostProperty()"
-    (viewSellerDashboard)="setView('seller-dashboard')"
-    (viewAdminDashboard)="setView('admin-dashboard')"
-    (viewMarketplace)="setView('marketplace')"
-    (resetHome)="onHomeReset()"
+    [currentView]="currentView"
+    (logoutEvent)="onLogout()"
+    (navigateDashboard)="checkInitialSession()"
   />
 
+  <!-- Main View Router -->
   <main class="app-main">
-    <!-- 1. ADMIN DASHBOARD: Displayed ONLY when logged in as Admin -->
-    @if (currentView() === 'admin-dashboard' && authService.userRole() === 'Admin') {
-      <app-admin-panel
-        [isOpen]="true"
-        [isDashboard]="true"
-        [cities]="cities()"
-        (propertyStatusChanged)="loadProperties()"
-        (switchView)="setView('marketplace')"
-      />
-    }
-
-    <!-- 2. SELLER DASHBOARD: Displayed ONLY when logged in as Seller -->
-    @else if (currentView() === 'seller-dashboard' && authService.userRole() === 'Seller') {
-      <app-seller-portal
-        [isOpen]="true"
-        [isDashboard]="true"
-        [initialTab]="sellerPortalTab()"
-        [sellerId]="authService.currentUser()?.profileId || 0"
-        [states]="states()"
-        [cities]="cities()"
-        (propertyCreated)="loadProperties()"
-        (viewProperty)="openPropertyDetails($event)"
-        (switchView)="setView('marketplace')"
-      />
-    }
-
-    <!-- 3. LANDING PAGE: Focused Login & Registration Form Only -->
-    @else if (currentView() === 'landing') {
+    <!-- 1. GUEST / LANDING VIEW: Login & Registration -->
+    @if (currentView === 'landing') {
       <app-landing-page
-        [states]="states()"
-        [cities]="cities()"
+        [states]="states"
+        [cities]="cities"
         (authSuccess)="onAuthSuccess($event)"
-        (browseMarketplace)="setView('marketplace')"
       />
     }
 
-    <!-- 4. BUYER MARKETPLACE: Default public & buyer search feed -->
-    @else {
-      @if (authService.userRole() === 'Admin') {
-        <div class="role-return-banner">
-          <div class="banner-text">
-            <span>🛡️ You are currently viewing the live Marketplace as <strong>Administrator</strong>.</span>
-          </div>
-          <button class="btn-return" (click)="setView('admin-dashboard')">Return to Admin Dashboard</button>
-        </div>
-      }
-      @if (authService.userRole() === 'Seller') {
-        <div class="role-return-banner">
-          <div class="banner-text">
-            <span>👤 You are currently viewing the live Marketplace as <strong>Seller</strong>.</span>
-          </div>
-          <button class="btn-return" (click)="setView('seller-dashboard')">Return to Seller Dashboard</button>
-        </div>
-      }
+    <!-- 2. USER / BUYER DASHBOARD -->
+    @else if (currentView === 'user') {
+      <app-user-dashboard />
+    }
 
-      <!-- MMT Hero Section & Super Search Widget -->
-      <app-hero-search
-        [cities]="cities()"
-        [activeCityId]="activeFilter().cityId ?? null"
-        [activeOption]="activeFilter().propertyOption || 'Sell'"
-        [activeType]="activeFilter().propertyType || ''"
-        (searchTriggered)="onSearchTriggered($event)"
-      />
+    <!-- 3. SELLER DASHBOARD -->
+    @else if (currentView === 'seller') {
+      <app-seller-portal />
+    }
 
-      <!-- Main Property Feed -->
-      <app-property-list
-        [properties]="properties()"
-        [activeCity]="activeCity()"
-        [isBuyer]="isBuyer()"
-        [cartPropertyIds]="cartPropertyIds()"
-        [isLoading]="isLoadingProperties()"
-        [currentSort]="activeFilter().sortBy || ''"
-        [comparedPropertyIds]="comparedPropertyIds()"
-        (sortChange)="onSortChange($event)"
-        (clearCity)="onClearCity()"
-        (resetAll)="onResetFilters()"
-        (openContact)="openOwnerContact($event)"
-        (toggleCart)="onToggleCart($event)"
-        (viewDetails)="openPropertyDetails($event)"
-        (toggleCompare)="handleToggleCompare($event)"
-      />
+    <!-- 4. ADMIN DASHBOARD -->
+    @else if (currentView === 'admin') {
+      <app-admin-panel />
     }
   </main>
 
-  <!-- MMT Branded Footer -->
-  <footer class="mmt-footer">
-    <div class="container footer-content">
-      <div class="footer-brand">
-        <div class="footer-logo">
-          <div class="footer-logo-badge">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 10.5L12 3L21 10.5V20C21 20.5523 20.5523 21 20 21H15V14H9V21H4C3.44772 21 3 20.5523 3 20V10.5Z" fill="#ffffff" />
-              <path d="M9 21V14H15V21H9Z" fill="#008cff" />
-            </svg>
-          </div>
-          <span class="footer-logo-text">easy<span class="footer-highlight">housing</span></span>
-        </div>
-        <p class="footer-tagline">Making property buying, selling, and renting seamless across India.</p>
-      </div>
-      <div class="footer-meta">
-        <p class="copyright">© 2026 Easy Housing Solutions (EHS). All rights reserved.</p>
-      </div>
-    </div>
-  </footer>
-
-  <!-- BUYER & SHARED MODALS -->
-  <app-auth-modal
-    [isOpen]="isAuthOpen()"
-    [states]="states()"
-    [cities]="cities()"
-    (close)="isAuthOpen.set(false)"
-    (authSuccess)="onAuthSuccess($event)"
-  />
-
-  <app-cart-modal
-    [isOpen]="isCartOpen()"
-    [items]="cartService.cartItems()"
-    [purchasedProperties]="purchasedProperties()"
-    [initialTab]="cartInitialTab()"
-    (close)="isCartOpen.set(false)"
-    (removeItem)="onRemoveCartItem($event)"
-    (contactOwner)="openOwnerContact($event)"
-    (buyItem)="handleBuyCartItem($event)"
-  />
-
-  <app-contact-modal
-    [isOpen]="isContactOpen()"
-    [contact]="selectedContact()"
-    [loading]="isLoadingContact()"
-    (close)="isContactOpen.set(false)"
-  />
-
-  <app-property-detail-modal
-    [isOpen]="isDetailOpen()"
-    [property]="selectedDetailProperty()"
-    [isBuyer]="isBuyer()"
-    [isSeller]="authService.userRole() === 'Seller'"
-    [isInCart]="selectedDetailProperty() ? cartPropertyIds().includes(selectedDetailProperty()!.propertyId) : false"
-    (close)="isDetailOpen.set(false)"
-    (contactOwner)="openOwnerContact($event)"
-    (toggleCart)="onToggleCart($event)"
-    (buyProperty)="handleBuyProperty($event)"
-  />
-
-  <!-- Floating Property Comparison Drawer (Visible when >= 1 property selected) -->
-  @if (comparedProperties().length > 0) {
-    <div class="floating-compare-tray">
-      <div class="compare-tray-content">
-        <div class="compare-tray-info">
-          <div class="compare-count-badge">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
-            </svg>
-            <span>{{ comparedProperties().length }}/2</span>
-          </div>
-          <div class="compare-tray-titles">
-            <strong>Compare Properties</strong>
-            <span>{{ comparedProperties().length === 2 ? 'Ready to compare side-by-side' : 'Select 1 more property' }}</span>
-          </div>
-        </div>
-
-        <!-- Selected Slots -->
-        <div class="compare-tray-slots">
-          @for (p of comparedProperties(); track p.propertyId) {
-            <div class="compare-slot-item">
-              @if (p.primaryImage) {
-                <img [src]="p.primaryImage" [alt]="p.propertyName" class="slot-thumb" />
-              } @else {
-                <div class="slot-thumb-empty">🏠</div>
-              }
-              <span class="slot-name" [title]="p.propertyName">{{ p.propertyName }}</span>
-              <button class="btn-slot-remove" (click)="handleRemoveCompare(p.propertyId)" title="Remove property">×</button>
-            </div>
-          }
-          @if (comparedProperties().length === 1) {
-            <div class="compare-slot-empty">
-              <span class="empty-plus">+</span>
-              <span>Select 2nd listing</span>
-            </div>
-          }
-        </div>
-
-        <!-- Actions -->
-        <div class="compare-tray-actions">
-          <button class="btn-clear-tray" (click)="handleClearCompare()">Clear</button>
-          <button
-            class="btn-compare-now"
-            [class.active]="comparedProperties().length === 2"
-            (click)="handleOpenCompareModal()"
-          >
-            Compare Now
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- Property Comparison Modal -->
-  <app-property-compare-modal
-    [isOpen]="isCompareOpen()"
-    [properties]="comparedProperties()"
-    [cities]="cities()"
-    [isBuyer]="isBuyer()"
-    [isSeller]="authService.userRole() === 'Seller'"
-    (close)="isCompareOpen.set(false)"
-    (removeProperty)="handleRemoveCompare($event)"
-    (viewDetails)="openPropertyDetails($event)"
-    (contactOwner)="openOwnerContact($event)"
-    (buyProperty)="handleBuyProperty($event)"
-  />
-
-  <!-- Floating Toast Notifications -->
-  <app-toast
-    [message]="toastMessage()"
-    [type]="toastType()"
-  />
-
-  <!-- Global Common Error Modal (Capgemini Specification) -->
+  <!-- Global Common Error Notification (Req 15) -->
   <app-common-error />
 </div>

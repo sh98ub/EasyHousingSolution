@@ -30,14 +30,7 @@ public class CartController : ControllerBase
     [Tags("Buyer")]
     public async Task<IActionResult> AddToCart(AddToCartDto dto)
     {
-        // Priority to token's authenticated ID; fallback to DTO if available
-        var buyerId = CurrentBuyerId > 0 ? CurrentBuyerId : dto.BuyerId;
-        if (buyerId <= 0)
-        {
-            return BadRequest(new { success = false, message = "A valid Buyer profile is required." });
-        }
-
-        var result = await _cartAppService.AddToCartAsync(buyerId, dto.PropertyId);
+        var result = await _cartAppService.AddToCartAsync(CurrentBuyerId, dto.PropertyId);
         return Ok(result);
     }
 
@@ -56,11 +49,6 @@ public class CartController : ControllerBase
     [Tags("Buyer")]
     public async Task<IActionResult> GetMyCart()
     {
-        if (CurrentBuyerId <= 0)
-        {
-            return Ok(Enumerable.Empty<EnrichedCartItemDto>());
-        }
-
         var result = await _cartAppService.GetBuyerCartAsync(CurrentBuyerId);
         return Ok(result);
     }
